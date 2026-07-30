@@ -1,12 +1,49 @@
 /**
  * Куда вести админа при клике на уведомление (колокол / страница уведомлений).
+ *
+ * Canonical rule: notification.site_id (slug after API normalize) → store.
+ * Never infer store from current panel / URL / tariff / email.
  */
 
 export type AdminNotificationSiteSlug = "gpt-store" | "subs-store";
 
+/** Known GPT Supabase `sites.id` values (optional client-side map). */
+export type SiteUuidMap = {
+  gpt?: string | null;
+  subs?: string | null;
+};
+
+/**
+ * Resolve store slug from stamped site_id / site_slug on a staff alert row.
+ * Accepts slugs or UUIDs when a uuid map is provided.
+ * Unknown values → null (caller must not invent GPT).
+ */
+export function resolveAlertSiteSlug(
+  siteId?: string | null,
+  uuidMap?: SiteUuidMap | null,
+): AdminNotificationSiteSlug | null {
+  if (!siteId) return null;
+  if (siteId === "subs-store" || siteId === "gpt-store") return siteId;
+  if (uuidMap?.subs && siteId === uuidMap.subs) return "subs-store";
+  if (uuidMap?.gpt && siteId === uuidMap.gpt) return "gpt-store";
+  return null;
+}
+
+/**
+ * @deprecated Prefer resolveAlertSiteSlug — this forces a slug for href builders.
+ * Unknown / missing → gpt-store only when row is known-legacy null; callers should
+ * pass already-normalized slug from API (`site_slug` / stamped `site_id`).
+ */
 export function siteSlugFromAlertSiteId(siteId?: string | null): AdminNotificationSiteSlug {
   if (siteId === "subs-store") return "subs-store";
-  return "gpt-store";
+  if (siteId === "gpt-store") return "gpt-store";
+  // UUID without map cannot be resolved client-side — do not pretend it's GPT.
+  // Keep gpt only for empty/legacy; UUIDs that look like UUIDs return gpt only as
+  // last-resort navigation target when href already embeds ?site= from server map.
+  if (siteId && /^[0-9a-f-]{36}$/i.test(siteId)) {
+    console.warn("[notifications] unresolved site UUID in UI — expected API site_slug", siteId);
+  }
+  return siteId ? "gpt-store" : "gpt-store";
 }
 
 export type StaffPanelRoot = "/admin" | "/operator";

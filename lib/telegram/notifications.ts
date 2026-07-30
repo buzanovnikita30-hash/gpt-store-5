@@ -440,14 +440,6 @@ export async function notifyNewReview(review: {
   const { recordGptStaffNotification, recordSubsStaffNotification } = await import(
     "@/lib/notifications/staff-events"
   );
-  await recordGptStaffNotification({
-    type: "new_review",
-    title: site === "subs-store" ? "⭐ Новый отзыв — SPOTIFY STORE" : "⭐ Новый отзыв",
-    message: `${review.author_name ?? "Клиент"}: ${review.content.slice(0, 180)}`,
-    siteSlug: site,
-    entity_type: "review",
-    entity_id: review.reviewId ?? null,
-  });
   if (site === "subs-store") {
     await recordSubsStaffNotification({
       type: "new_review",
@@ -456,6 +448,15 @@ export async function notifyNewReview(review: {
       entity_type: "review",
       entity_id: review.reviewId ?? null,
       sendEmail: false,
+    });
+  } else {
+    await recordGptStaffNotification({
+      type: "new_review",
+      title: "⭐ Новый отзыв",
+      message: `${review.author_name ?? "Клиент"}: ${review.content.slice(0, 180)}`,
+      siteSlug: "gpt-store",
+      entity_type: "review",
+      entity_id: review.reviewId ?? null,
     });
   }
   // Email (+ Telegram mirror) всем admin/operator с доступом к сайту.
@@ -488,13 +489,24 @@ export async function notifyOperationalFailure(payload: {
 }) {
   const siteSlug: "gpt-store" | "subs-store" = payload.siteSlug ?? "gpt-store";
   const safeDetail = payload.detail ? payload.detail.slice(0, 500) : "";
-  void import("@/lib/notifications/staff-events").then(({ recordGptStaffNotification }) =>
-    recordGptStaffNotification({
-      type: "order_problem",
-      title: `⚠️ ${payload.context}`,
-      message: safeDetail || payload.context,
-      siteSlug,
-    }),
+  void import("@/lib/notifications/staff-events").then(
+    async ({ recordGptStaffNotification, recordSubsStaffNotification }) => {
+      if (siteSlug === "subs-store") {
+        await recordSubsStaffNotification({
+          type: "order_problem",
+          title: `⚠️ ${payload.context}`,
+          message: safeDetail || payload.context,
+          sendEmail: false,
+        });
+      } else {
+        await recordGptStaffNotification({
+          type: "order_problem",
+          title: `⚠️ ${payload.context}`,
+          message: safeDetail || payload.context,
+          siteSlug: "gpt-store",
+        });
+      }
+    },
   );
   void emailStaffOrderProblem({
     siteSlug,

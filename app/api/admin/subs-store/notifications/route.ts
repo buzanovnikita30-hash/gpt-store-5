@@ -32,6 +32,7 @@ export async function GET() {
       email: ctx.user.email,
       role: ctx.role,
     }),
+    (data ?? []).map((row) => String(row.id)),
   );
 
   const items = (data ?? [])
@@ -60,7 +61,7 @@ export async function GET() {
       const unread = isNotificationUnreadForStaff(r, ctx.user.id, ctx.role, readIds, {
         sharedInboxUserId,
       });
-      return { ...row, is_read: !unread };
+      return { ...row, is_read: !unread, site_slug: "subs-store" as const };
     });
 
   const unread = await countStaffUnreadNotifications(ctx.subs, {

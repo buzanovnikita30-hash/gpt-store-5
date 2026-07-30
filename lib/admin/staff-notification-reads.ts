@@ -12,6 +12,7 @@ const UNREAD_SCAN_PAGE_SIZE = 500;
 const UNREAD_SCAN_MAX_ROWS = 10_000;
 const READ_IDS_PAGE_SIZE = 1_000;
 const READ_IDS_MAX_ROWS = 30_000;
+const SCOPED_READ_IDS_MAX = 500;
 // Backward-compat for internal verification scripts.
 const MARK_ALL_CANDIDATE_LIMIT = UNREAD_SCAN_PAGE_SIZE;
 
@@ -125,42 +126,6 @@ function matchesRecipient(
 
 
 
-async function ensureStaffProfileForReads(
-
-  admin: SupabaseClient,
-
-  params: { userId: string; email?: string | null; role: UserRole },
-
-): Promise<void> {
-
-  const { data } = await admin.from("profiles").select("id").eq("id", params.userId).maybeSingle();
-
-  if (data) return;
-
-
-
-  const role = params.role === "admin" || params.role === "operator" ? params.role : "operator";
-
-  const { error } = await admin.from("profiles").insert({
-
-    id: params.userId,
-
-    email: params.email ?? null,
-
-    role,
-
-  });
-
-  if (error && !error.message.toLowerCase().includes("duplicate")) {
-
-    console.warn("[ensureStaffProfileForReads]", error.message);
-
-  }
-
-}
-
-
-
 /**
 
  * UUID для notification_reads (FK → profiles).
@@ -176,10 +141,6 @@ export async function resolveStaffNotificationUserId(
   params: { userId: string; email?: string | null; role: UserRole },
 
 ): Promise<string> {
-
-  await ensureStaffProfileForReads(admin, params);
-
-
 
   const { data: byId } = await admin.from("profiles").select("id").eq("id", params.userId).maybeSingle();
 
@@ -221,10 +182,34 @@ export async function loadStaffReadNotificationIds(
 
   readsUserId: string,
 
+  notificationIds?: string[],
+
 ): Promise<Set<string>> {
 
   try {
     const out = new Set<string>();
+
+    if (notificationIds && notificationIds.length <= SCOPED_READ_IDS_MAX) {
+      const uniqueIds = [...new Set(notificationIds.filter(Boolean))];
+      for (let i = 0; i < uniqueIds.length; i += CHUNK) {
+        const { data, error } = await admin
+          .from("notification_reads")
+          .select("notification_id")
+          .eq("user_id", readsUserId)
+          .in("notification_id", uniqueIds.slice(i, i + CHUNK));
+
+        if (error) {
+          if (error.message.toLowerCase().includes("notification_reads")) return new Set();
+          console.warn("[loadStaffReadNotificationIds]", error.message);
+          return new Set();
+        }
+
+        for (const row of (data ?? []) as Array<{ notification_id: string }>) {
+          out.add(String(row.notification_id));
+        }
+      }
+      return out;
+    }
 
     for (let offset = 0; offset < READ_IDS_MAX_ROWS; offset += READ_IDS_PAGE_SIZE) {
       const { data, error } = await admin
@@ -309,17 +294,18 @@ async function loadUnreadCandidatesPage(
 
     .select("id, recipient_user_id, recipient_role, is_read, type")
 
+    .in("type", [...STAFF_INBOX_TYPES])
+
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
 
 
+  // GPT unread/mark-all: only gpt-store (+ legacy null).
+  // Subs dual-write rows are counted via Subs notifications API — including them
+  // here double-counts and historically caused Spotify→GPT mislabels in the feed.
   if (siteSlug === "gpt-store" && siteId) {
-    const subsSiteId = await getSiteUUID("subs-store");
-    const siteFilter = subsSiteId
-      ? `site_id.eq.${siteId},site_id.eq.${subsSiteId},site_id.is.null`
-      : `site_id.eq.${siteId},site_id.is.null`;
-    q = q.or(siteFilter);
+    q = q.or(`site_id.eq.${siteId},site_id.is.null`);
   }
 
 
@@ -455,16 +441,39 @@ export async function countStaffUnreadNotifications(
 
   });
 
-  const readIds = await loadStaffReadNotificationIds(admin, readsUserId);
-
-
+  try {
+    const gptSiteId =
+      params.siteSlug === "gpt-store" ? await getSiteUUID("gpt-store") : null;
+    // Always null for GPT path — do not count subs-store UUID rows in GPT unread.
+    const { data, error } = await admin.rpc("count_staff_unread_notifications", {
+      p_auth_user_id: params.userId,
+      p_reads_user_id: readsUserId,
+      p_role: params.role,
+      p_site_slug: params.siteSlug,
+      p_shared_inbox_user_id: params.sharedInboxUserId ?? null,
+      p_gpt_site_id: gptSiteId,
+      p_subs_site_id: null,
+    });
+    if (!error && typeof data === "number" && Number.isFinite(data)) {
+      return data;
+    }
+    if (!error && data != null) {
+      const n = Number(data);
+      if (Number.isFinite(n)) return n;
+    }
+  } catch {
+    /* fallback below */
+  }
 
   const loaded = await loadAllUnreadCandidates(admin, params.siteSlug);
 
   if ("error" in loaded) return 0;
 
-
-
+  const readIds = await loadStaffReadNotificationIds(
+    admin,
+    readsUserId,
+    loaded.map((row) => row.id),
+  );
   return loaded.filter((row) =>
 
     isNotificationUnreadForStaff(row, params.userId, params.role, readIds, {

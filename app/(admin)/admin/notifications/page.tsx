@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PanelErrorBoundary } from "@/components/errors/PanelErrorBoundary";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, CheckCheck, Filter } from "lucide-react";
 import {
   persistAdminSiteBeforeNavigate,
   siteSlugFromAlertSiteId,
-  staffPanelRootFromPathname,
-  type AdminNotificationSiteSlug,
 } from "@/lib/admin/notificationNavigation";
 import { useStaffNotificationsContext } from "@/components/admin/StaffNotificationsProvider";
-import { getAdminSelectedSiteSlug } from "@/components/admin/SiteSwitcher";
 import {
   notificationCardClass,
   notificationTitleClass,
@@ -62,28 +58,12 @@ const TYPE_ICONS: Record<string, string> = {
 type FilterType = "all" | "unread" | NotificationType;
 type SiteFilter = "all" | "gpt-store" | "subs-store";
 
-function resolveSiteSlug(sp: URLSearchParams): AdminNotificationSiteSlug {
-  const raw = sp.get("site");
-  if (raw === "subs-store" || raw === "gpt-store") return raw;
-  if (typeof window !== "undefined") {
-    const saved = getAdminSelectedSiteSlug();
-    if (saved === "subs-store" || saved === "gpt-store") return saved;
-  }
-  return "gpt-store";
-}
-
 function NotificationsPageContent() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const staffRoot = staffPanelRootFromPathname(pathname);
-  const siteSlug = resolveSiteSlug(searchParams);
-
   const [filter, setFilter] = useState<FilterType>("all");
   // Selected store switcher must NOT hide the other store's notifications.
   const [siteFilter, setSiteFilter] = useState<SiteFilter>("all");
   const { items, unread: unreadCount, loading, markingAll, loadError, markRead, markAllRead } =
     useStaffNotificationsContext();
-
   const filteredItems = items.filter((i) => {
     const itemSite = (i.site_id === "subs-store" ? "subs-store" : "gpt-store") as SiteFilter;
     if (siteFilter !== "all" && itemSite !== siteFilter) return false;
@@ -183,13 +163,14 @@ function NotificationsPageContent() {
             <p className="mt-1 text-xs text-gray-400">Они появятся здесь, когда придут</p>
           </div>
         )}
-        {filteredItems.map((item) => (
+        {filteredItems.map((item) => {
+            const eventSite = siteSlugFromAlertSiteId(item.site_id ?? null);
+            return (
             <Link
               key={`${item.site_id ?? "gpt-store"}:${item.id}`}
               href={item.href}
-              className={notificationCardClass(item.is_read, siteSlug)}
+              className={notificationCardClass(item.is_read, eventSite)}
               onClick={() => {
-                const eventSite = siteSlugFromAlertSiteId(item.site_id ?? null);
                 persistAdminSiteBeforeNavigate(eventSite);
                 if (!item.is_read) void markRead(item.id, eventSite);
               }}
@@ -199,7 +180,7 @@ function NotificationsPageContent() {
                 <div className="flex items-start justify-between gap-2">
                   <p className={notificationTitleClass(item.is_read)}>{item.title}</p>
                   {!item.is_read && (
-                    <span className={notificationUnreadBadge(siteSlug)}>Новое</span>
+                    <span className={notificationUnreadBadge(eventSite)}>Новое</span>
                   )}
                 </div>
                 <p className={cn("mt-0.5 text-sm", item.is_read ? "text-gray-400" : "text-gray-600")}>
@@ -209,12 +190,12 @@ function NotificationsPageContent() {
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                      item.site_id === "subs-store"
+                      eventSite === "subs-store"
                         ? "bg-[#1DB954]/15 text-[#0d8f4a]"
                         : "bg-[#10a37f]/10 text-[#0f7d62]",
                     )}
                   >
-                    {item.site_id === "subs-store" ? "SPOTIFY STORE" : "GPT STORE"}
+                    {eventSite === "subs-store" ? "SPOTIFY STORE" : "GPT STORE"}
                   </span>
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
                     {TYPE_LABELS[item.type ?? ""] ?? item.type}
@@ -230,7 +211,8 @@ function NotificationsPageContent() {
                 </div>
               </div>
             </Link>
-        ))}
+            );
+        })}
       </div>
     </div>
   );

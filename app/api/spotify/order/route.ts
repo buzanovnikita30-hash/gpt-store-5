@@ -18,7 +18,6 @@ export async function POST(request: Request) {
     }
 
     const { createSubsAwaitingPaymentOrder } = await import("@/lib/subs/create-subs-order");
-    const { notifySubsStoreStaffOrderEvent } = await import("@/lib/subs/subs-notifications");
 
     const created = await createSubsAwaitingPaymentOrder({
       tariffSlug: planId,
@@ -55,27 +54,20 @@ export async function POST(request: Request) {
     }
 
     if (created.ok) {
-      await notifySubsStoreStaffOrderEvent({
+      // Single staff write path (Subs DB + email). Do not also call recordGptStaffEvent —
+      // that previously dual-wrote GPT+Subs and produced duplicate feed rows.
+      const { recordGptStaffEvent } = await import("@/lib/notifications/staff-events");
+      void recordGptStaffEvent({
         type: "new_order",
         title: "Subs Store: новый заказ Spotify",
         message: `${planName} · ${price} ₽ · ${email}`,
-        orderId: created.orderId,
+        siteSlug: "subs-store",
+        entity_type: "order",
+        entity_id: created.orderId,
         emailSubject: "🔔 Новый заказ Spotify — Subs Store",
         emailBody: `Новый заказ Subs Store\nТариф: ${planName}\nСумма: ${price} ₽\nEmail: ${email}\nОткрыть: ${adminOrdersUrl}`,
-      });
+      }).catch(() => undefined);
     }
-
-    const { recordGptStaffEvent } = await import("@/lib/notifications/staff-events");
-    void recordGptStaffEvent({
-      type: "new_order",
-      title: "Subs Store: новый заказ Spotify",
-      message: `${planName} · ${price} ₽ · ${email}`,
-      siteSlug: "subs-store",
-      entity_type: orderId ? "order" : null,
-      entity_id: orderId ?? null,
-      emailSubject: "🔔 Новый заказ Spotify — Subs Store",
-      emailBody: `Новый заказ Subs Store\nТариф: ${planName}\nСумма: ${price} ₽\nEmail: ${email}\nОткрыть: ${adminOrdersUrl}`,
-    }).catch(() => undefined);
 
     if (!created.ok) {
       return NextResponse.json({ error: created.error }, { status: 500 });

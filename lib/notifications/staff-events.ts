@@ -67,9 +67,24 @@ export async function recordGptStaffNotification(params: {
    */
   refreshExistingChat?: boolean;
 }): Promise<void> {
+  // Never dual-write Spotify into GPT notifications — that caused GPT-stamped
+  // duplicates in the unified staff feed.
+  if ((params.siteSlug ?? "gpt-store") === "subs-store") {
+    await recordSubsStaffNotification({
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      entity_type: params.entity_type,
+      entity_id: params.entity_id,
+      sendEmail: false,
+      refreshExistingChat: params.refreshExistingChat,
+    });
+    return;
+  }
+
   try {
     const admin = createAdminClient();
-    const siteSlug = params.siteSlug ?? "gpt-store";
+    const siteSlug = "gpt-store";
     const siteId = await getSiteUUID(siteSlug);
     const entityId = params.entity_id ?? null;
     const entityType = params.entity_type ?? null;
@@ -174,7 +189,12 @@ export async function recordSubsStaffNotification(params: {
   }
 }
 
-/** DB + email для GPT Store. */
+/**
+ * Staff in-app + email.
+ * Spotify events → Subs notifications DB only (no GPT dual-write).
+ * Dual-write previously caused the unified feed to show the same event twice:
+ * once stamped as GPT (bug) and once as Spotify.
+ */
 export async function recordGptStaffEvent(params: {
   type: NotificationType;
   title: string;
@@ -186,25 +206,7 @@ export async function recordGptStaffEvent(params: {
   emailBody: string;
   refreshExistingChat?: boolean;
 }): Promise<void> {
-  await recordGptStaffNotification({
-    type: params.type,
-    title: params.title,
-    message: params.message,
-    siteSlug: params.siteSlug,
-    entity_type: params.entity_type,
-    entity_id: params.entity_id,
-    refreshExistingChat: params.refreshExistingChat,
-  });
-
   const site = params.siteSlug ?? "gpt-store";
-  await sendStaffEmailForEvent({
-    siteSlug: site,
-    type: params.type,
-    title: params.emailSubject,
-    message: params.emailBody,
-    entity_type: params.entity_type,
-    entity_id: params.entity_id,
-  });
 
   if (site === "subs-store") {
     await recordSubsStaffNotification({
@@ -215,7 +217,28 @@ export async function recordGptStaffEvent(params: {
       entity_id: params.entity_id,
       emailSubject: params.emailSubject,
       emailBody: params.emailBody,
-      sendEmail: false,
+      sendEmail: true,
+      refreshExistingChat: params.refreshExistingChat,
     });
+    return;
   }
+
+  await recordGptStaffNotification({
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    siteSlug: "gpt-store",
+    entity_type: params.entity_type,
+    entity_id: params.entity_id,
+    refreshExistingChat: params.refreshExistingChat,
+  });
+
+  await sendStaffEmailForEvent({
+    siteSlug: "gpt-store",
+    type: params.type,
+    title: params.emailSubject,
+    message: params.emailBody,
+    entity_type: params.entity_type,
+    entity_id: params.entity_id,
+  });
 }

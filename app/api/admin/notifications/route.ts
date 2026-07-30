@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getSiteUUID } from "@/lib/admin/getSiteId";
+import { getSiteUUID, resolveGptNotificationSiteSlug } from "@/lib/admin/getSiteId";
 import { requireStaffApi } from "@/lib/admin/require-staff-api";
 import {
   countStaffUnreadNotifications,
@@ -11,7 +11,12 @@ import {
   resolveStaffNotificationUserId,
 } from "@/lib/admin/staff-notification-reads";
 
-/** GPT Store notifications (таблица в GPT Supabase). Subs — /api/admin/subs-store/notifications */
+/**
+ * GPT Store staff notifications (GPT Supabase).
+ * Spotify/Subs events live in Subs DB → /api/admin/subs-store/notifications.
+ * Do NOT OR-include subs-store UUID rows here: dual-write copies would be
+ * stamped as gpt-store on the client and mislabeled in the unified feed.
+ */
 export async function GET(req: NextRequest) {
   const ctx = await requireStaffApi();
   if (ctx instanceof NextResponse) return ctx;
@@ -23,12 +28,9 @@ export async function GET(req: NextRequest) {
 
   if (siteId) {
     if (siteSlug === "gpt-store") {
-      const subsSiteId = await getSiteUUID("subs-store");
-      const siteFilter = subsSiteId
-        ? `site_id.eq.${siteId},site_id.eq.${subsSiteId},site_id.is.null`
-        : `site_id.eq.${siteId},site_id.is.null`;
+      // Only GPT (+ legacy null). Subs rows are served by the Subs notifications API.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query = (query as any).or(siteFilter) as typeof query;
+      query = (query as any).or(`site_id.eq.${siteId},site_id.is.null`) as typeof query;
     } else {
       query = query.eq("site_id", siteId);
     }
@@ -46,26 +48,39 @@ export async function GET(req: NextRequest) {
       email: ctx.user.email,
       role: ctx.role,
     }),
+    (data ?? []).map((row) => String(row.id)),
   );
 
-  const items = (data ?? [])
-    .filter((row) => {
-      const t = (row as { type?: string }).type;
-      const role = (row as { recipient_role?: string | null }).recipient_role;
-      if (role === "client") return false;
-      return t !== "chat_reply";
-    })
-    .map((row) => {
-      const r = row as {
-        id: string;
-        recipient_user_id: string | null;
-        recipient_role: string | null;
-        is_read: boolean;
-        type?: string;
-      };
-      const unread = isNotificationUnreadForStaff(r, ctx.user.id, ctx.role, readIds);
-      return { ...row, is_read: !unread };
-    });
+  const items = await Promise.all(
+    (data ?? [])
+      .filter((row) => {
+        const t = (row as { type?: string }).type;
+        const role = (row as { recipient_role?: string | null }).recipient_role;
+        if (role === "client") return false;
+        return t !== "chat_reply";
+      })
+      .map(async (row) => {
+        const r = row as {
+          id: string;
+          recipient_user_id: string | null;
+          recipient_role: string | null;
+          is_read: boolean;
+          type?: string;
+          site_id?: string | null;
+        };
+        const unread = isNotificationUnreadForStaff(r, ctx.user.id, ctx.role, readIds);
+        const resolvedSlug = await resolveGptNotificationSiteSlug(r.site_id);
+        // Skip dual-written Spotify rows if any leak through (wrong site_id).
+        if (siteSlug === "gpt-store" && resolvedSlug === "subs-store") {
+          return null;
+        }
+        return {
+          ...row,
+          is_read: !unread,
+          site_slug: resolvedSlug ?? "gpt-store",
+        };
+      }),
+  );
 
   const unread = await countStaffUnreadNotifications(ctx.admin, {
     userId: ctx.user.id,
@@ -74,7 +89,10 @@ export async function GET(req: NextRequest) {
     email: ctx.user.email,
   });
 
-  return NextResponse.json({ items: items.slice(0, 100), unread });
+  return NextResponse.json({
+    items: items.filter(Boolean).slice(0, 100),
+    unread,
+  });
 }
 
 export async function PATCH(req: NextRequest) {

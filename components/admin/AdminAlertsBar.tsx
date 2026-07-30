@@ -201,6 +201,7 @@ export function AdminAlertsBar() {
                 )}
                 {items.map((i) => {
                   const unreadItem = !i.is_read;
+                  const eventSite = i.site_id === "subs-store" ? "subs-store" : "gpt-store";
                   return (
                     <li key={`${i.site_id ?? "gpt-store"}:${i.id}`} className="border-b border-gray-50 last:border-0">
                       <button
@@ -209,7 +210,7 @@ export function AdminAlertsBar() {
                         className={cn(
                           "block w-full border-l-4 px-3 py-2.5 text-left transition-colors hover:bg-gray-50",
                           unreadItem
-                            ? currentSiteSlug === "subs-store"
+                            ? eventSite === "subs-store"
                               ? "border-l-[#1DB954] bg-[#1DB954]/10"
                               : "border-l-[#10a37f] bg-[#10a37f]/10"
                             : "border-l-transparent bg-white opacity-70",
@@ -225,7 +226,12 @@ export function AdminAlertsBar() {
                             {i.title}
                           </p>
                           {unreadItem && (
-                            <span className="rounded bg-[#10a37f] px-1 py-0.5 text-[9px] font-bold uppercase text-white">
+                            <span
+                              className={cn(
+                                "rounded px-1 py-0.5 text-[9px] font-bold uppercase text-white",
+                                eventSite === "subs-store" ? "bg-[#1DB954]" : "bg-[#10a37f]",
+                              )}
+                            >
                               new
                             </span>
                           )}
@@ -234,12 +240,12 @@ export function AdminAlertsBar() {
                           <span
                             className={cn(
                               "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
-                              i.site_id === "subs-store"
+                              eventSite === "subs-store"
                                 ? "bg-[#1DB954]/15 text-[#0d8f4a]"
                                 : "bg-[#10a37f]/10 text-[#0f7d62]",
                             )}
                           >
-                            {i.site_id === "subs-store" ? "SPOTIFY STORE" : "GPT STORE"}
+                            {eventSite === "subs-store" ? "SPOTIFY STORE" : "GPT STORE"}
                           </span>
                         </div>
                         <p

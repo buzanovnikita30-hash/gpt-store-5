@@ -30,12 +30,12 @@ export type StaffNotificationView = StaffNotificationRow & {
   href: string;
 };
 
-type ApiItem = StaffNotificationRow;
+type ApiItem = StaffNotificationRow & { site_slug?: string | null };
 type ApiResponse = { items?: ApiItem[]; unread?: number; error?: string };
 
 type SiteSlug = "gpt-store" | "subs-store";
 
-const POLL_MS = 30_000;
+const POLL_MS = 90_000;
 const REALTIME_DEBOUNCE_MS = 600;
 
 function notificationsApiForSites(sites: SiteSlug[]): Array<{ url: string; site: SiteSlug }> {
@@ -51,6 +51,51 @@ function notificationsApiForSites(sites: SiteSlug[]): Array<{ url: string; site:
 function normalizeAccessibleSites(raw: string[] | null | undefined): SiteSlug[] {
   const out = (raw ?? []).filter((s): s is SiteSlug => s === "gpt-store" || s === "subs-store");
   return out.length ? out : ["gpt-store"];
+}
+
+/** Prefer API site_slug (entity truth); never invent GPT from the fetch route alone when slug present. */
+function resolveRowSiteSlug(row: ApiItem, apiSource: SiteSlug): SiteSlug {
+  if (row.site_slug === "subs-store" || row.site_slug === "gpt-store") return row.site_slug;
+  if (row.site_id === "subs-store" || row.site_id === "gpt-store") return row.site_id;
+  // Subs API has no site_id column — source of truth is the API itself.
+  if (apiSource === "subs-store") return "subs-store";
+  return "gpt-store";
+}
+
+/**
+ * Deduplicate dual-written / double-path events across GPT + Subs DBs.
+ * Prefer Subs copy when the same entity+type exists in both.
+ */
+function dedupeStaffNotificationRows(rows: ApiItem[]): ApiItem[] {
+  const byEntity = new Map<string, ApiItem>();
+  const withoutEntity: ApiItem[] = [];
+
+  for (const row of rows) {
+    const et = row.entity_type?.trim() || "";
+    const eid = row.entity_id?.trim() || "";
+    const type = row.type?.trim() || "";
+    if (!et || !eid || !type) {
+      withoutEntity.push(row);
+      continue;
+    }
+    const key = `${type}:${et}:${eid}`;
+    const prev = byEntity.get(key);
+    if (!prev) {
+      byEntity.set(key, row);
+      continue;
+    }
+    const prefer =
+      row.site_id === "subs-store" && prev.site_id !== "subs-store"
+        ? row
+        : prev.site_id === "subs-store"
+          ? prev
+          : new Date(row.created_at).getTime() >= new Date(prev.created_at).getTime()
+            ? row
+            : prev;
+    byEntity.set(key, prefer);
+  }
+
+  return [...byEntity.values(), ...withoutEntity];
 }
 
 function toToast(item: StaffNotificationView): StaffToastPayload {
@@ -122,10 +167,14 @@ export function useStaffNotifications(params: {
           unreadTotal += Math.max(0, Number(data.unread));
         }
         for (const row of data.items ?? []) {
-          merged.push({ ...row, site_id: site });
+          const resolved = resolveRowSiteSlug(row, site);
+          // Stamp site_id as canonical slug for badges / filters / href.
+          // Never overwrite a resolved entity site with the fetch-route slug blindly.
+          merged.push({ ...row, site_id: resolved, site_slug: resolved });
         }
       }
-      const rows = merged.map((row) =>
+      const deduped = dedupeStaffNotificationRows(merged);
+      const rows = deduped.map((row) =>
         safeMapStaffNotificationRow(row, (row.site_id as SiteSlug) ?? "gpt-store", staffRoot),
       );
 
@@ -193,8 +242,17 @@ export function useStaffNotifications(params: {
 
   useEffect(() => {
     if (markingAll) return;
-    const poll = window.setInterval(() => void reload(), POLL_MS);
-    return () => window.clearInterval(poll);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void reload();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === "visible") void reload();
+    }, POLL_MS);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(poll);
+    };
   }, [reload, markingAll]);
 
   useEffect(() => {

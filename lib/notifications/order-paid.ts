@@ -130,16 +130,7 @@ export async function handleOrderPaidNotification(
     const siteSlug = params.siteSlug as "gpt-store" | "subs-store";
     await cancelUnpaidOrderReminder(siteSlug, params.orderId);
 
-    await recordGptStaffNotification({
-      type: "payment_success",
-      title: staffTitle,
-      message: staffMessage,
-      siteSlug,
-      entity_type: "order",
-      entity_id: params.orderId,
-    });
-
-    if (params.siteSlug === "subs-store") {
+    if (siteSlug === "subs-store") {
       await recordSubsStaffNotification({
         type: "payment_success",
         title: `SPOTIFY STORE: ${isRenewal ? "продление" : "новая оплата"}`,
@@ -147,6 +138,15 @@ export async function handleOrderPaidNotification(
         entity_type: "order",
         entity_id: params.orderId,
         sendEmail: false,
+      });
+    } else {
+      await recordGptStaffNotification({
+        type: "payment_success",
+        title: staffTitle,
+        message: staffMessage,
+        siteSlug: "gpt-store",
+        entity_type: "order",
+        entity_id: params.orderId,
       });
     }
 
