@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { OrderStatus } from "@/types/database";
 import { GPT_ORDER_STATUSES, GPT_ORDER_STATUS_LABELS } from "@/lib/admin/gpt-order-status-labels";
@@ -13,13 +13,20 @@ const OPTIONS: { value: OrderStatus; label: string }[] = GPT_ORDER_STATUSES.map(
 type Props = {
   orderId: string;
   initialStatus: OrderStatus;
+  /** После успешного PATCH (чат и др. — refetch summary). */
+  onStatusChange?: (next: OrderStatus) => void;
 };
 
-export function OrderStatusSelect({ orderId, initialStatus }: Props) {
+export function OrderStatusSelect({ orderId, initialStatus, onStatusChange }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState<OrderStatus>(initialStatus);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (busy) return;
+    setStatus(initialStatus);
+  }, [initialStatus, orderId, busy]);
 
   async function onChange(next: OrderStatus) {
     if (next === status) return;
@@ -37,6 +44,7 @@ export function OrderStatusSelect({ orderId, initialStatus }: Props) {
         return;
       }
       setStatus(next);
+      onStatusChange?.(next);
       router.refresh();
     } catch {
       setErr("Сеть");

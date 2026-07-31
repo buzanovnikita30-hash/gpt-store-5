@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -16,13 +16,19 @@ type Props = {
   orderId: string;
   initialStatus: string;
   siteSlug: "subs-store";
+  onStatusChange?: (next: string) => void;
 };
 
-export function SubsOrderStatusSelect({ orderId, initialStatus }: Props) {
+export function SubsOrderStatusSelect({ orderId, initialStatus, onStatusChange }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (busy) return;
+    setStatus(initialStatus);
+  }, [initialStatus, orderId, busy]);
 
   async function onChange(next: string) {
     if (next === status) return;
@@ -40,6 +46,7 @@ export function SubsOrderStatusSelect({ orderId, initialStatus }: Props) {
         return;
       }
       setStatus(next);
+      onStatusChange?.(next);
       router.refresh();
     } catch {
       setErr("Сеть");
