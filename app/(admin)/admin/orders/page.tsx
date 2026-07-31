@@ -6,7 +6,11 @@ import { OrderStatusSelect } from "@/components/admin/OrderStatusSelect";
 import { SubsOrderStatusSelect } from "@/components/admin/SubsOrderStatusSelect";
 import type { OrderStatus } from "@/types/database";
 import { resolveAdminSiteSlug } from "@/lib/admin/siteFilter";
-import { staffOrdersStatusHref } from "@/lib/admin/staffNavHref";
+import {
+  staffOrdersClearClientHref,
+  staffOrdersStatusHref,
+} from "@/lib/admin/staffNavHref";
+import { parseOrdersClientParam } from "@/lib/admin/orders-client-filter";
 import { fetchGptOrdersForAdmin } from "@/lib/admin/gpt-orders-fetch";
 import { resolveGptOrderPlanLabel } from "@/lib/admin/gpt-order-plan-label";
 import { fetchSubsOrdersForAdmin } from "@/lib/admin/subs-orders-fetch";
@@ -67,15 +71,30 @@ const SUBS_PAY_LABELS: Record<string, string> = {
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string; site?: string; highlight?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    page?: string;
+    site?: string;
+    highlight?: string;
+    client?: string;
+  }>;
 }) {
   noStore();
-  const { status: filterStatus, page: pageParam, site: siteParam } = await searchParams;
+  const {
+    status: filterStatus,
+    page: pageParam,
+    site: siteParam,
+    client: clientParam,
+  } = await searchParams;
   const siteSlug = resolveAdminSiteSlug({ site: siteParam });
   const site = getSiteBySlug(siteSlug);
   const page = Number(pageParam ?? 1);
   const limit = 100;
   const offset = (page - 1) * limit;
+  const clientFilter = parseOrdersClientParam(clientParam);
+  const clientQueryValue = clientFilter
+    ? clientParam!.trim()
+    : null;
 
   if (siteSlug === "subs-store") {
     const subs = createSubsStoreAdminClient();
@@ -91,10 +110,11 @@ export default async function AdminOrdersPage({
       );
     }
 
-    const { orders, error: ordersError } = await fetchSubsOrdersForAdmin(subs, {
+    const { orders, error: ordersError, clientMeta } = await fetchSubsOrdersForAdmin(subs, {
       filterStatus,
       offset,
       limit,
+      clientFilter,
     });
 
     return (
@@ -113,7 +133,9 @@ export default async function AdminOrdersPage({
             {["", "new", "awaiting_payment", "paid", "processing", "activated", "problem"].map((s) => (
               <a
                 key={s || "all"}
-                href={staffOrdersStatusHref(siteSlug, s || undefined)}
+                href={staffOrdersStatusHref(siteSlug, s || undefined, {
+                  client: clientQueryValue,
+                })}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   filterStatus === s || (!filterStatus && !s)
                     ? "bg-[#1DB954]/15 text-[#0d8f4a]"
@@ -126,6 +148,22 @@ export default async function AdminOrdersPage({
           </div>
         </div>
 
+        {clientFilter && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#1DB954]/30 bg-[#1DB954]/08 px-4 py-2.5 text-sm text-gray-800">
+            <span>
+              Заказы клиента:{" "}
+              <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
+              <span className="ml-2 text-xs text-gray-500">· {site.brandName}</span>
+            </span>
+            <a
+              href={staffOrdersClearClientHref(siteSlug, filterStatus)}
+              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB954]/40"
+            >
+              Показать все заказы
+            </a>
+          </div>
+        )}
+
         {filterStatus === "awaiting_payment" && (
           <UnpaidOrdersEmailCampaign siteSlug="subs-store" />
         )}
@@ -137,7 +175,13 @@ export default async function AdminOrdersPage({
         )}
 
         {!ordersError && orders.length === 0 && (
-          <p className="mb-4 text-sm text-gray-500">Заказов по выбранному фильтру нет.</p>
+          <p className="mb-4 text-sm text-gray-500">
+            {clientFilter
+              ? `У этого клиента пока нет заказов в выбранном магазине${
+                  clientMeta?.label ? ` (${clientMeta.label})` : ""
+                }.`
+              : "Заказов по выбранному фильтру нет."}
+          </p>
         )}
 
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -218,10 +262,11 @@ export default async function AdminOrdersPage({
 
   const supabase = createAdminClient();
 
-  const { orders, error: gptOrdersError } = await fetchGptOrdersForAdmin(supabase, {
+  const { orders, error: gptOrdersError, clientMeta } = await fetchGptOrdersForAdmin(supabase, {
     filterStatus,
     offset,
     limit,
+    clientFilter,
   });
 
   const userIds = [...new Set(orders.map((o) => o.user_id).filter((id): id is string => Boolean(id)))];
@@ -257,7 +302,9 @@ export default async function AdminOrdersPage({
           {["", "awaiting_payment", "paid", "activating", "waiting_client", "active", "failed"].map((s) => (
             <a
               key={s || "all"}
-              href={staffOrdersStatusHref(siteSlug, s || undefined)}
+              href={staffOrdersStatusHref(siteSlug, s || undefined, {
+                client: clientQueryValue,
+              })}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 filterStatus === s || (!filterStatus && !s)
                   ? "bg-[#10a37f]/10 text-[#0f7d62]"
@@ -274,6 +321,22 @@ export default async function AdminOrdersPage({
         </div>
       </div>
 
+      {clientFilter && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#10a37f]/30 bg-[#10a37f]/08 px-4 py-2.5 text-sm text-gray-800">
+          <span>
+            Заказы клиента:{" "}
+            <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
+            <span className="ml-2 text-xs text-gray-500">· {site.brandName}</span>
+          </span>
+          <a
+            href={staffOrdersClearClientHref(siteSlug, filterStatus)}
+            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+          >
+            Показать все заказы
+          </a>
+        </div>
+      )}
+
       {filterStatus === "awaiting_payment" && (
         <UnpaidOrdersEmailCampaign siteSlug="gpt-store" />
       )}
@@ -285,7 +348,13 @@ export default async function AdminOrdersPage({
       )}
 
       {!gptOrdersError && orders.length === 0 && (
-        <p className="mb-4 text-sm text-gray-500">Заказов по выбранному фильтру нет.</p>
+        <p className="mb-4 text-sm text-gray-500">
+          {clientFilter
+            ? `У этого клиента пока нет заказов в выбранном магазине${
+                clientMeta?.label ? ` (${clientMeta.label})` : ""
+              }.`
+            : "Заказов по выбранному фильтру нет."}
+        </p>
       )}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">

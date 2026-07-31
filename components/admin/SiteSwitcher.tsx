@@ -106,9 +106,13 @@ export function SiteSwitcher({
       localStorage.setItem(STORAGE_KEY, site.slug);
     } catch {}
     onSiteChange?.(site);
-    // Navigate to current page with ?site= param so server components can filter by site
+    // Navigate to current page with ?site= param so server components can filter by site.
+    // GPT/Spotify — разные БД: клиентский фильтр и highlight сбрасываем при смене магазина.
     const url = new URL(window.location.href);
     url.searchParams.set("site", site.slug);
+    url.searchParams.delete("client");
+    url.searchParams.delete("highlight");
+    url.searchParams.delete("page");
     window.location.href = url.toString();
   }
 

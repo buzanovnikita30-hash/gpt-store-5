@@ -18,9 +18,20 @@ export function staffNotificationsHref(
 export function staffOrdersStatusHref(
   siteSlug: "gpt-store" | "subs-store",
   status?: string,
+  opts?: { client?: string | null },
 ): string {
   const params = new URLSearchParams();
   params.set("site", siteSlug);
   if (status) params.set("status", status);
+  const client = opts?.client?.trim();
+  if (client) params.set("client", client);
   return `?${params.toString()}`;
+}
+
+/** Сброс клиентского фильтра, сохраняя site (+ опционально status). */
+export function staffOrdersClearClientHref(
+  siteSlug: "gpt-store" | "subs-store",
+  status?: string | null,
+): string {
+  return staffOrdersStatusHref(siteSlug, status || undefined);
 }

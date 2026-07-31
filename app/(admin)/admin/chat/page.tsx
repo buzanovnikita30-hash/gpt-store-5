@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { OperatorPanel } from "@/components/chat/OperatorPanel";
+import { staffLoginUrl } from "@/lib/auth/staff-access";
 import { resolveServerRole } from "@/lib/auth/server-role";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { resolveAdminSiteSlug } from "@/lib/admin/siteFilter";
@@ -19,6 +21,10 @@ export default async function AdminChatPage({
   const params = await searchParams;
   const siteSlug = resolveAdminSiteSlug(params);
   const site = getSiteBySlug(siteSlug);
+  const headersList = await headers();
+  const invokePath = headersList.get("x-invoke-pathname") ?? "";
+  const panelBase = invokePath.startsWith("/operator") ? "/operator" : "/admin";
+  const chatReturnPath = `${panelBase}/chat?site=${siteSlug}`;
 
   const supabase = await createClient();
   const {
@@ -26,7 +32,7 @@ export default async function AdminChatPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?returnUrl=/admin/chat");
+    redirect(staffLoginUrl(chatReturnPath));
   }
 
   const role = await resolveServerRole(user);
@@ -42,7 +48,7 @@ export default async function AdminChatPage({
     .single();
 
   if (!profileRow) {
-    redirect("/login?returnUrl=/admin/chat");
+    redirect(staffLoginUrl(chatReturnPath));
   }
 
   const profile = { ...profileRow, role } as Profile;

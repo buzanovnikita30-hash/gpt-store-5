@@ -63,37 +63,48 @@ export function UsersRoleManager({
         return next;
       });
 
-      const res = await fetch("/api/admin/users/role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, role, site: adminSite }),
-      });
-      const json = (await res.json()) as { error?: string; role?: UserItem["role"] };
+      try {
+        const res = await fetch("/api/admin/users/role", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, role, site: adminSite }),
+        });
+        const json = (await res.json()) as { error?: string; role?: UserItem["role"] };
 
-      setSavingId(null);
+        if (!res.ok) {
+          setRoles((prev) => ({ ...prev, [userId]: previous }));
+          setRowStatus((prev) => ({ ...prev, [userId]: "error" }));
+          setRowError((prev) => ({
+            ...prev,
+            [userId]: json.error ?? "Не удалось сохранить роль",
+          }));
+          setMessage(json.error ?? "Ошибка обновления роли");
+          return false;
+        }
 
-      if (!res.ok) {
+        const persisted = json.role ?? role;
+        setRoles((prev) => ({ ...prev, [userId]: persisted }));
+        setSavedRoles((prev) => ({ ...prev, [userId]: persisted }));
+        setRowStatus((prev) => ({ ...prev, [userId]: "ok" }));
+        const email = usersByIdRef.current.get(userId)?.email;
+        setMessage(
+          email ?
+            `Роль ${email} → ${persisted}`
+          : `Роль обновлена → ${persisted}`,
+        );
+        return true;
+      } catch {
         setRoles((prev) => ({ ...prev, [userId]: previous }));
         setRowStatus((prev) => ({ ...prev, [userId]: "error" }));
         setRowError((prev) => ({
           ...prev,
-          [userId]: json.error ?? "Не удалось сохранить роль",
+          [userId]: "Сеть недоступна",
         }));
-        setMessage(json.error ?? "Ошибка обновления роли");
+        setMessage("Сеть недоступна");
         return false;
+      } finally {
+        setSavingId(null);
       }
-
-      const persisted = json.role ?? role;
-      setRoles((prev) => ({ ...prev, [userId]: persisted }));
-      setSavedRoles((prev) => ({ ...prev, [userId]: persisted }));
-      setRowStatus((prev) => ({ ...prev, [userId]: "ok" }));
-      const email = usersByIdRef.current.get(userId)?.email;
-      setMessage(
-        email ?
-          `Роль ${email} → ${persisted}`
-        : `Роль обновлена → ${persisted}`,
-      );
-      return true;
     },
     [adminSite, savedRoles],
   );
@@ -109,21 +120,26 @@ export function UsersRoleManager({
     setAddingOperator(true);
     setMessage(null);
 
-    const res = await fetch("/api/admin/users/operator-by-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, site: adminSite }),
-    });
-    const json = (await res.json()) as { error?: string; message?: string };
-    setAddingOperator(false);
+    try {
+      const res = await fetch("/api/admin/users/operator-by-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, site: adminSite }),
+      });
+      const json = (await res.json()) as { error?: string; message?: string };
 
-    if (!res.ok) {
-      setMessage(json.error ?? "Не удалось назначить оператора");
-      return;
+      if (!res.ok) {
+        setMessage(json.error ?? "Не удалось назначить оператора");
+        return;
+      }
+
+      setMessage(json.message ?? "Оператор назначен");
+      setOperatorEmail("");
+    } catch {
+      setMessage("Сеть недоступна");
+    } finally {
+      setAddingOperator(false);
     }
-
-    setMessage(json.message ?? "Оператор назначен");
-    setOperatorEmail("");
   }
 
   async function runTransfer() {
@@ -138,36 +154,41 @@ export function UsersRoleManager({
     }
     setTransferring(true);
     setMessage(null);
-    const res = await fetch("/api/admin/users/transfer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        targetUserId: transferTargetId,
-        grant: transferGrant,
-        migrateData: transferMigrate,
-        site: adminSite,
-      }),
-    });
-    const json = (await res.json()) as {
-      error?: string;
-      role?: UserItem["role"];
-      counts?: { orders: number; chat_sessions: number; chat_messages: number };
-    };
-    setTransferring(false);
-    if (!res.ok) {
-      setMessage(json.error ?? "Не удалось передать");
-      return;
+    try {
+      const res = await fetch("/api/admin/users/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: transferTargetId,
+          grant: transferGrant,
+          migrateData: transferMigrate,
+          site: adminSite,
+        }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        role?: UserItem["role"];
+        counts?: { orders: number; chat_sessions: number; chat_messages: number };
+      };
+      if (!res.ok) {
+        setMessage(json.error ?? "Не удалось передать");
+        return;
+      }
+      if (json.role) {
+        setRoles((prev) => ({ ...prev, [transferTargetId]: json.role! }));
+        setSavedRoles((prev) => ({ ...prev, [transferTargetId]: json.role! }));
+      }
+      const c = json.counts;
+      const extra =
+        c && transferMigrate
+          ? ` Перенесено: заказов ${c.orders}, чатов ${c.chat_sessions}, сообщений ${c.chat_messages}.`
+          : "";
+      setMessage(`Роль выдана получателю.${extra} Обновите сессию (перелогин или жёсткое обновление страницы), чтобы JWT подтянул контекст.`);
+    } catch {
+      setMessage("Сеть недоступна");
+    } finally {
+      setTransferring(false);
     }
-    if (json.role) {
-      setRoles((prev) => ({ ...prev, [transferTargetId]: json.role! }));
-      setSavedRoles((prev) => ({ ...prev, [transferTargetId]: json.role! }));
-    }
-    const c = json.counts;
-    const extra =
-      c && transferMigrate
-        ? ` Перенесено: заказов ${c.orders}, чатов ${c.chat_sessions}, сообщений ${c.chat_messages}.`
-        : "";
-    setMessage(`Роль выдана получателю.${extra} Обновите сессию (перелогин или жёсткое обновление страницы), чтобы JWT подтянул контекст.`);
   }
 
   const transferCandidates = users.filter((u) => u.id !== currentUserId);

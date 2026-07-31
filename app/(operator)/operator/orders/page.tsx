@@ -5,7 +5,13 @@ import AdminOrdersPage from "../../../(admin)/admin/orders/page";
 export const metadata: Metadata = { title: "Operator · Заказы" };
 
 export default async function OperatorOrdersPage(props: {
-  searchParams: Promise<{ status?: string; page?: string; site?: string; highlight?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    page?: string;
+    site?: string;
+    highlight?: string;
+    client?: string;
+  }>;
 }) {
   return (
     <div>

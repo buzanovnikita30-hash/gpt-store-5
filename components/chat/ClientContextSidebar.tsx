@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ChatRoomListItem } from "@/types/chat-ui";
 import { Loader2, MessageCircle, ShoppingBag } from "lucide-react";
@@ -8,7 +8,10 @@ import { Loader2, MessageCircle, ShoppingBag } from "lucide-react";
 import { StaffOrderStatusSelect } from "@/components/admin/StaffOrderStatusSelect";
 import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
 import { subsOrderStatusLabelRu } from "@/lib/admin/subs-order-status-labels";
+import { buildOrdersClientParam } from "@/lib/admin/orders-client-filter";
 import { staffNavHref } from "@/lib/admin/staffNavHref";
+import { createClient } from "@/lib/supabase/client";
+import { tryCreateSubsBrowserClient } from "@/lib/supabase/subs-browser-client";
 import { cn } from "@/lib/utils";
 
 type OrderRow = {
@@ -71,16 +74,23 @@ export function ClientContextSidebar({
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [preferredOrderId, setPreferredOrderId] = useState<string | null>(null);
+  const lastRefreshRef = useRef(0);
+  const fetchGenRef = useRef(0);
 
-  useEffect(() => {
-    if (!room?.client_id) {
-      setData(null);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setErr(null);
-    void (async () => {
+  const effectiveOrderId = preferredOrderId || highlightOrderId;
+
+  const loadSummary = useCallback(
+    async (opts?: { silent?: boolean; orderIdOverride?: string | null }) => {
+      if (!room?.client_id) {
+        setData(null);
+        return;
+      }
+      const gen = ++fetchGenRef.current;
+      if (!opts?.silent) {
+        setLoading(true);
+        setErr(null);
+      }
       try {
         const orderFromClient = room.client_id.startsWith("order:")
           ? room.client_id.slice("order:".length)
@@ -93,31 +103,62 @@ export function ClientContextSidebar({
           site: siteSlug,
         });
         if (!isSyntheticClient) params.set("userId", room.client_id);
-        const orderId = highlightOrderId || orderFromClient;
+        const orderId = opts?.orderIdOverride || preferredOrderId || highlightOrderId || orderFromClient;
         if (orderId) params.set("orderId", orderId);
         const res = await fetch(`/api/staff/client-summary?${params.toString()}`, {
           credentials: "include",
         });
         const json = (await res.json()) as Summary & { error?: string };
         if (!res.ok) throw new Error(json.error ?? "Не удалось загрузить");
-        if (!cancelled) setData(json);
+        if (gen === fetchGenRef.current) setData(json);
       } catch (e) {
-        if (!cancelled) {
+        if (gen === fetchGenRef.current && !opts?.silent) {
           setData(null);
           setErr(e instanceof Error ? e.message : "Ошибка");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (gen === fetchGenRef.current && !opts?.silent) setLoading(false);
       }
-    })();
+    },
+    [room?.client_id, room?.client?.email, room?.id, siteSlug, highlightOrderId, preferredOrderId],
+  );
+
+  useEffect(() => {
+    setPreferredOrderId(null);
+  }, [room?.client_id]);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    if (!room?.client_id) return;
+    const supabase =
+      siteSlug === "subs-store" ? tryCreateSubsBrowserClient() : createClient();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel(`staff-client-card-${siteSlug}-${room.client_id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          const now = Date.now();
+          if (now - lastRefreshRef.current < 1200) return;
+          lastRefreshRef.current = now;
+          void loadSummary({ silent: true });
+        },
+      )
+      .subscribe();
+
     return () => {
-      cancelled = true;
+      void supabase.removeChannel(channel);
     };
-  }, [room?.client_id, room?.client?.email, room?.id, siteSlug, highlightOrderId]);
+  }, [room?.client_id, siteSlug, loadSummary]);
 
   const resolvedSite = data?.site_slug ?? siteSlug;
   const focusOrder = data?.focus_order ?? data?.active_order ?? null;
-  const ordersHref = staffNavHref(`${staffBasePath}/orders`, resolvedSite);
+  const otherOrders = (data?.orders ?? []).filter((o) => o.id !== focusOrder?.id).slice(0, 5);
 
   if (!room) {
     return (
@@ -126,6 +167,22 @@ export function ClientContextSidebar({
       </div>
     );
   }
+
+  const clientParam = buildOrdersClientParam({
+    clientId: room.client_id,
+    profileId: data?.profile?.id,
+    email: data?.profile?.email ?? room.client?.email,
+  });
+  const ordersHref = clientParam
+    ? staffNavHref(
+        `${staffBasePath}/orders?client=${encodeURIComponent(clientParam)}`,
+        resolvedSite,
+      )
+    : staffNavHref(`${staffBasePath}/orders`, resolvedSite);
+  const clientsHref = staffNavHref(
+    `${staffBasePath.replace(/\/$/, "")}/clients?highlight=${encodeURIComponent(room.client_id)}`,
+    resolvedSite,
+  );
 
   return (
     <aside className="hidden w-80 flex-shrink-0 flex-col border-l border-gray-100 bg-gray-50/90 xl:flex">
@@ -177,7 +234,7 @@ export function ClientContextSidebar({
                   <div
                     className={cn(
                       "rounded-xl border bg-white p-3",
-                      highlightOrderId && focusOrder.id === highlightOrderId
+                      effectiveOrderId && focusOrder.id === effectiveOrderId
                         ? "border-[#10a37f] ring-2 ring-[#10a37f]/25"
                         : "border-gray-200",
                     )}
@@ -199,14 +256,49 @@ export function ClientContextSidebar({
                         orderId={focusOrder.id}
                         initialStatus={focusOrder.status}
                         siteSlug={resolvedSite}
+                        onStatusChange={() => {
+                          void loadSummary({ silent: true });
+                        }}
                       />
                     </div>
                     <Link
-                      href={`${staffNavHref(`${staffBasePath}/orders`, resolvedSite)}&highlight=${encodeURIComponent(focusOrder.id)}`}
-                      className="mt-3 inline-flex items-center rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                      href={
+                        clientParam
+                          ? `${staffNavHref(
+                              `${staffBasePath}/orders?client=${encodeURIComponent(clientParam)}&highlight=${encodeURIComponent(focusOrder.id)}`,
+                              resolvedSite,
+                            )}`
+                          : `${staffNavHref(`${staffBasePath}/orders`, resolvedSite)}&highlight=${encodeURIComponent(focusOrder.id)}`
+                      }
+                      className="mt-3 inline-flex items-center rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
                     >
                       Открыть заказ
                     </Link>
+                  </div>
+                ) : null}
+                {otherOrders.length > 0 ? (
+                  <div>
+                    <p className="text-xs text-gray-400">Другие заказы</p>
+                    <ul className="mt-1 space-y-1.5">
+                      {otherOrders.map((o) => (
+                        <li key={o.id} className="rounded-lg border border-gray-100 bg-white px-2.5 py-1.5 text-xs">
+                          <p className="font-medium text-gray-800">
+                            {o.plan_id} · {o.price.toLocaleString("ru")} ₽
+                          </p>
+                          <p className="text-gray-500">{statusLabel(resolvedSite, o.status)}</p>
+                          <button
+                            type="button"
+                            className="mt-1 text-[11px] font-medium text-[#10a37f] hover:underline"
+                            onClick={() => {
+                              setPreferredOrderId(o.id);
+                              void loadSummary({ silent: true, orderIdOverride: o.id });
+                            }}
+                          >
+                            Сделать текущим
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ) : null}
                 <div>
@@ -221,16 +313,26 @@ export function ClientContextSidebar({
                 ) : null}
               </>
             ) : null}
+            {clientParam ? (
+              <Link
+                href={ordersHref}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+              >
+                <ShoppingBag size={14} />
+                Все заказы клиента
+              </Link>
+            ) : (
+              <p
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                role="status"
+              >
+                Не удалось определить клиента для фильтра заказов. Откройте диалог с профилем или
+                email.
+              </p>
+            )}
             <Link
-              href={ordersHref}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <ShoppingBag size={14} />
-              Все заказы клиента
-            </Link>
-            <Link
-              href={`${staffBasePath.replace(/\/$/, "")}/clients?highlight=${encodeURIComponent(room.client_id)}`}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              href={clientsHref}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
             >
               <MessageCircle size={14} />
               Полная карточка
