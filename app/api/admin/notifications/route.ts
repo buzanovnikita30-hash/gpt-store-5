@@ -56,7 +56,11 @@ export async function GET(req: NextRequest) {
       .filter((row) => {
         const t = (row as { type?: string }).type;
         const role = (row as { recipient_role?: string | null }).recipient_role;
+        const recipient = (row as { recipient_user_id?: string | null }).recipient_user_id;
         if (role === "client") return false;
+        // Staff broadcast rows have recipient_user_id = null. Per-user customer
+        // copies must never enter the staff feed.
+        if (recipient) return false;
         return t !== "chat_reply";
       })
       .map(async (row) => {

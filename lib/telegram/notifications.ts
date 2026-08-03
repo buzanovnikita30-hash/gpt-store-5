@@ -175,10 +175,29 @@ async function broadcastTelegram(
 async function hasRecentNewOrderNotification(
   orderId: string,
   withinMinutes = 10,
+  siteSlug: "gpt-store" | "subs-store" = "gpt-store",
 ): Promise<boolean> {
   try {
-    const admin = createAdminClient();
     const cutoff = new Date(Date.now() - withinMinutes * 60_000).toISOString();
+    if (siteSlug === "subs-store") {
+      const { createSubsStoreAdminClient } = await import("@/lib/supabase/subs-store-admin");
+      const { resolveSubsInboxRecipientUserId } = await import("@/lib/subs/subs-notifications");
+      const subs = createSubsStoreAdminClient();
+      if (!subs) return false;
+      const inboxId = await resolveSubsInboxRecipientUserId(subs);
+      let q = subs
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("type", "new_order")
+        .eq("entity_type", "order")
+        .eq("entity_id", orderId)
+        .gte("created_at", cutoff)
+        .limit(1);
+      if (inboxId) q = q.eq("recipient_user_id", inboxId);
+      const { count } = await q;
+      return (count ?? 0) > 0;
+    }
+    const admin = createAdminClient();
     const { count } = await admin
       .from("notifications")
       .select("id", { count: "exact", head: true })
@@ -219,7 +238,7 @@ export async function notifyNewOrder(
   const siteSlug: "gpt-store" | "subs-store" =
     options?.siteSlug ??
     (order.product?.toLowerCase().includes("spotify") ? "subs-store" : "gpt-store");
-  if (await hasRecentNewOrderNotification(order.id)) {
+  if (await hasRecentNewOrderNotification(order.id, 10, siteSlug)) {
     return;
   }
   const brand = siteSlug === "subs-store" ? "SPOTIFY STORE" : "GPT STORE";

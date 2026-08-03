@@ -231,8 +231,8 @@ export function useStaffNotifications(params: {
   }, []);
 
   useEffect(() => {
+    // Keep knownIds across /admin ↔ /operator so the same unread rows don't re-toast.
     bootRef.current = true;
-    knownIdsRef.current = new Set();
   }, [staffRoot]);
 
   useEffect(() => {

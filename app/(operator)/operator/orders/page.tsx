@@ -11,6 +11,11 @@ export default async function OperatorOrdersPage(props: {
     site?: string;
     highlight?: string;
     client?: string;
+    from?: string;
+    to?: string;
+    paid?: string;
+    plan?: string;
+    period?: string;
   }>;
 }) {
   return (

@@ -11,6 +11,7 @@ import {
   staffOrdersStatusHref,
 } from "@/lib/admin/staffNavHref";
 import { parseOrdersClientParam } from "@/lib/admin/orders-client-filter";
+import { resolveDashboardPeriod } from "@/lib/admin/dashboard-period";
 import { fetchGptOrdersForAdmin } from "@/lib/admin/gpt-orders-fetch";
 import { resolveGptOrderPlanLabel } from "@/lib/admin/gpt-order-plan-label";
 import { fetchSubsOrdersForAdmin } from "@/lib/admin/subs-orders-fetch";
@@ -77,6 +78,11 @@ export default async function AdminOrdersPage({
     site?: string;
     highlight?: string;
     client?: string;
+    from?: string;
+    to?: string;
+    paid?: string;
+    plan?: string;
+    period?: string;
   }>;
 }) {
   noStore();
@@ -85,6 +91,11 @@ export default async function AdminOrdersPage({
     page: pageParam,
     site: siteParam,
     client: clientParam,
+    from: fromParam,
+    to: toParam,
+    paid: paidParam,
+    plan: planParam,
+    period: periodParam,
   } = await searchParams;
   const siteSlug = resolveAdminSiteSlug({ site: siteParam });
   const site = getSiteBySlug(siteSlug);
@@ -95,6 +106,18 @@ export default async function AdminOrdersPage({
   const clientQueryValue = clientFilter
     ? clientParam!.trim()
     : null;
+  const hasDateFilter = Boolean(fromParam || toParam || periodParam);
+  const period = hasDateFilter
+    ? resolveDashboardPeriod({
+        period: fromParam && toParam ? "custom" : periodParam || "month",
+        from: fromParam ?? toParam,
+        to: toParam ?? fromParam,
+      })
+    : null;
+  const paidOnly = paidParam === "1" || paidParam === "true";
+  const paymentStatus =
+    paidParam === "refunded" ? "refunded" : paidParam === "paid" ? "paid" : null;
+  const planId = planParam?.trim() || null;
 
   if (siteSlug === "subs-store") {
     const subs = createSubsStoreAdminClient();
@@ -115,6 +138,11 @@ export default async function AdminOrdersPage({
       offset,
       limit,
       clientFilter,
+      fromIso: period?.fromIso ?? null,
+      toIso: period?.toIso ?? null,
+      paidOnly: paidOnly && !paymentStatus,
+      paymentStatus,
+      planId,
     });
 
     return (
@@ -148,16 +176,35 @@ export default async function AdminOrdersPage({
           </div>
         </div>
 
-        {clientFilter && (
+        {(clientFilter || period || paidOnly || paymentStatus || planId) && (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#1DB954]/30 bg-[#1DB954]/08 px-4 py-2.5 text-sm text-gray-800">
-            <span>
-              Заказы клиента:{" "}
-              <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
-              <span className="ml-2 text-xs text-gray-500">· {site.brandName}</span>
-            </span>
+            {clientFilter ? (
+              <span>
+                Заказы клиента:{" "}
+                <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
+              </span>
+            ) : null}
+            {period ? (
+              <span className="text-xs text-gray-600">Период: {period.label}</span>
+            ) : null}
+            {paidOnly || paymentStatus ? (
+              <span className="text-xs text-gray-600">
+                Оплата: {paymentStatus === "refunded" ? "возврат" : "оплачено"}
+              </span>
+            ) : null}
+            {planId ? <span className="text-xs text-gray-600">Тариф: {planId}</span> : null}
+            <span className="text-xs text-gray-500">· {site.brandName}</span>
+            {clientFilter ? (
+              <a
+                href={staffOrdersClearClientHref(siteSlug, filterStatus)}
+                className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB954]/40"
+              >
+                Сбросить клиента
+              </a>
+            ) : null}
             <a
-              href={staffOrdersClearClientHref(siteSlug, filterStatus)}
-              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB954]/40"
+              href={staffOrdersStatusHref(siteSlug, filterStatus)}
+              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
               Показать все заказы
             </a>
@@ -267,6 +314,10 @@ export default async function AdminOrdersPage({
     offset,
     limit,
     clientFilter,
+    fromIso: period?.fromIso ?? null,
+    toIso: period?.toIso ?? null,
+    paidOnly,
+    planId,
   });
 
   const userIds = [...new Set(orders.map((o) => o.user_id).filter((id): id is string => Boolean(id)))];
@@ -321,16 +372,29 @@ export default async function AdminOrdersPage({
         </div>
       </div>
 
-      {clientFilter && (
+      {(clientFilter || period || paidOnly || planId) && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-[#10a37f]/30 bg-[#10a37f]/08 px-4 py-2.5 text-sm text-gray-800">
-          <span>
-            Заказы клиента:{" "}
-            <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
-            <span className="ml-2 text-xs text-gray-500">· {site.brandName}</span>
-          </span>
+          {clientFilter ? (
+            <span>
+              Заказы клиента:{" "}
+              <span className="font-medium">{clientMeta?.label ?? clientQueryValue}</span>
+            </span>
+          ) : null}
+          {period ? <span className="text-xs text-gray-600">Период: {period.label}</span> : null}
+          {paidOnly ? <span className="text-xs text-gray-600">Оплата: оплачено</span> : null}
+          {planId ? <span className="text-xs text-gray-600">Тариф: {planId}</span> : null}
+          <span className="text-xs text-gray-500">· {site.brandName}</span>
+          {clientFilter ? (
+            <a
+              href={staffOrdersClearClientHref(siteSlug, filterStatus)}
+              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+            >
+              Сбросить клиента
+            </a>
+          ) : null}
           <a
-            href={staffOrdersClearClientHref(siteSlug, filterStatus)}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+            href={staffOrdersStatusHref(siteSlug, filterStatus)}
+            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             Показать все заказы
           </a>

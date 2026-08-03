@@ -5,7 +5,7 @@ import { applySubsOrdersStatusFilter } from "@/lib/admin/subs-orders-query";
 import { formatSubsTariffDisplayLabel } from "@/lib/admin/subs-tariff-display-label";
 
 const ORDERS_SELECT =
-  "id,status,payment_status,final_price,customer_email,created_at,user_id,tariff_id";
+  "id,status,payment_status,final_price,customer_email,created_at,paid_at,user_id,tariff_id";
 
 export type SubsAdminOrderRow = {
   id: string;
@@ -14,6 +14,7 @@ export type SubsAdminOrderRow = {
   final_price: number;
   customer_email: string | null;
   created_at: string;
+  paid_at: string | null;
   user_id: string | null;
   tariff_id: string | null;
   tariffTitle: string;
@@ -105,6 +106,11 @@ export async function fetchSubsOrdersForAdmin(
     offset: number;
     limit: number;
     clientFilter?: OrdersClientFilter | null;
+    fromIso?: string | null;
+    toIso?: string | null;
+    paidOnly?: boolean;
+    planId?: string | null;
+    paymentStatus?: string | null;
   },
 ): Promise<{
   orders: SubsAdminOrderRow[];
@@ -123,6 +129,33 @@ export async function fetchSubsOrdersForAdmin(
     .range(opts.offset, opts.offset + opts.limit - 1);
 
   q = applySubsOrdersStatusFilter(q, opts.filterStatus);
+
+  if (opts.planId?.trim()) {
+    q = q.eq("tariff_id", opts.planId.trim());
+  }
+
+  if (opts.paymentStatus?.trim()) {
+    q = q.eq("payment_status", opts.paymentStatus.trim());
+  } else if (opts.paidOnly) {
+    q = q.eq("payment_status", "paid");
+  }
+
+  if (opts.fromIso) {
+    if (opts.paidOnly || opts.paymentStatus === "paid" || opts.paymentStatus === "refunded") {
+      q = q.or(
+        `paid_at.gte.${opts.fromIso},and(paid_at.is.null,created_at.gte.${opts.fromIso})`,
+      );
+    } else {
+      q = q.gte("created_at", opts.fromIso);
+    }
+  }
+  if (opts.toIso) {
+    if (opts.paidOnly || opts.paymentStatus === "paid" || opts.paymentStatus === "refunded") {
+      q = q.or(`paid_at.lte.${opts.toIso},and(paid_at.is.null,created_at.lte.${opts.toIso})`);
+    } else {
+      q = q.lte("created_at", opts.toIso);
+    }
+  }
 
   if (opts.clientFilter) {
     const emailLit = resolved.email ? `"${resolved.email.replace(/"/g, "")}"` : null;
@@ -201,6 +234,7 @@ export async function fetchSubsOrdersForAdmin(
       final_price: Number(row.final_price ?? 0),
       customer_email: row.customer_email,
       created_at: row.created_at,
+      paid_at: (row.paid_at as string | null) ?? null,
       user_id: row.user_id,
       tariff_id: row.tariff_id,
       tariffTitle,

@@ -13,6 +13,7 @@ export type GptAdminOrderRow = {
   account_email: string | null;
   created_at: string;
   user_id: string | null;
+  paid_at?: string | null;
 };
 
 export type GptOrdersClientMeta = {
@@ -98,6 +99,10 @@ export async function fetchGptOrdersForAdmin(
     offset: number;
     limit: number;
     clientFilter?: OrdersClientFilter | null;
+    fromIso?: string | null;
+    toIso?: string | null;
+    paidOnly?: boolean;
+    planId?: string | null;
   },
 ): Promise<{
   orders: GptAdminOrderRow[];
@@ -112,7 +117,7 @@ export async function fetchGptOrdersForAdmin(
 
   let query = admin
     .from("orders")
-    .select("id, product, plan_id, price, status, account_email, created_at, user_id")
+    .select("id, product, plan_id, price, status, account_email, created_at, user_id, paid_at")
     .not("product", "ilike", "spotify%")
     .order("created_at", { ascending: false })
     .range(opts.offset, opts.offset + opts.limit - 1);
@@ -125,6 +130,33 @@ export async function fetchGptOrdersForAdmin(
     opts.filterStatus === "awaiting_payment" ? "pending" : opts.filterStatus?.trim();
   if (normalizedStatus && normalizedStatus !== "all") {
     query = query.eq("status", normalizedStatus);
+  }
+
+  if (opts.planId?.trim()) {
+    query = query.eq("plan_id", opts.planId.trim());
+  }
+
+  if (opts.paidOnly) {
+    query = query.in("status", ["paid", "activating", "waiting_client", "active"]);
+  }
+
+  if (opts.fromIso) {
+    if (opts.paidOnly) {
+      query = query.or(
+        `paid_at.gte.${opts.fromIso},and(paid_at.is.null,created_at.gte.${opts.fromIso})`,
+      );
+    } else {
+      query = query.gte("created_at", opts.fromIso);
+    }
+  }
+  if (opts.toIso) {
+    if (opts.paidOnly) {
+      query = query.or(
+        `paid_at.lte.${opts.toIso},and(paid_at.is.null,created_at.lte.${opts.toIso})`,
+      );
+    } else {
+      query = query.lte("created_at", opts.toIso);
+    }
   }
 
   if (opts.clientFilter) {

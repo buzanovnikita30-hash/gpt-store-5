@@ -38,17 +38,15 @@ export async function GET() {
   const items = (data ?? [])
     .filter((row) => {
       const t = (row as { type?: string }).type;
+      // Client cabinet rows share the same table (recipient = customer).
+      // Only shared staff inbox (or broadcast null) belongs in Admin/Operator feed.
+      // Previously only new_order was filtered → payment_success / order_* showed twice
+      // (staff inbox + customer copy of the same order event).
       if (t === "chat_reply") return false;
       const recipient = (row as { recipient_user_id?: string | null }).recipient_user_id;
-      if (
-        t === "new_order" &&
-        recipient &&
-        sharedInboxUserId &&
-        recipient !== sharedInboxUserId
-      ) {
-        return false;
-      }
-      return true;
+      if (!recipient) return true;
+      if (sharedInboxUserId && recipient === sharedInboxUserId) return true;
+      return false;
     })
     .map((row) => {
       const r = row as {

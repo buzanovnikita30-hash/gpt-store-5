@@ -104,7 +104,12 @@ export async function loadAdminOverviewStats(
   const todayYmd = moscowTodayYmd(now);
   const dayStart = moscowDayStartIso(todayYmd);
   const dayEnd = moscowDayEndIso(todayYmd);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Calendar 7 Moscow days inclusive (today + previous 6), not rolling 168h UTC.
+  const sevenStartYmd = (() => {
+    const base = new Date(`${todayYmd}T12:00:00+03:00`);
+    return moscowTodayYmd(new Date(base.getTime() - 6 * 24 * 60 * 60 * 1000));
+  })();
+  const sevenDaysAgo = moscowDayStartIso(sevenStartYmd);
   const monthStart = moscowDayStartIso(moscowMonthStartYmd(now));
 
   const authSiteScope = siteSlug === "subs-store" ? "subs-store" : "gpt-store";
