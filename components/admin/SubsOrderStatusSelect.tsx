@@ -32,8 +32,10 @@ export function SubsOrderStatusSelect({ orderId, initialStatus, onStatusChange }
 
   async function onChange(next: string) {
     if (next === status) return;
+    const prev = status;
     setBusy(true);
     setErr(null);
+    setStatus(next);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}?site=subs-store`, {
         method: "PATCH",
@@ -42,13 +44,14 @@ export function SubsOrderStatusSelect({ orderId, initialStatus, onStatusChange }
       });
       const j = (await res.json()) as { error?: string };
       if (!res.ok) {
+        setStatus(prev);
         setErr(j.error ?? "Ошибка");
         return;
       }
-      setStatus(next);
       onStatusChange?.(next);
       router.refresh();
     } catch {
+      setStatus(prev);
       setErr("Сеть");
     } finally {
       setBusy(false);

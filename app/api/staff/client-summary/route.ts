@@ -1,15 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
+import { resolveStaffFocusOrder } from "@/lib/admin/resolve-staff-focus-order";
+import { formatSubsTariffDisplayLabel } from "@/lib/admin/subs-tariff-display-label";
 import { subsOrderStatusLabelRu } from "@/lib/admin/subs-order-status-labels";
+import { getSiteUUID } from "@/lib/admin/getSiteId";
 import { resolveServerRole } from "@/lib/auth/server-role";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { createSubsStoreAdminClient } from "@/lib/supabase/subs-store-admin";
 
 const STAGES = ["purchased", "waiting", "no_purchase", "needs_help", "other"] as const;
 
-const GPT_INACTIVE = new Set(["expired", "failed", "refunded"]);
-const SUBS_INACTIVE = new Set(["cancelled", "refund", "problem"]);
+type StaffOrderRow = {
+  id: string;
+  status: string;
+  plan_id: string;
+  price: number;
+  created_at: string;
+  payment_status: string | null;
+  paid_at: string | null;
+  plan_title: string;
+};
+
+const SUBS_ORDER_SELECT =
+  "id, status, payment_status, tariff_id, final_price, created_at, paid_at, customer_email, account_email, user_id";
+
+function mapSubsOrderRow(o: {
+  id: unknown;
+  status?: unknown;
+  payment_status?: unknown;
+  tariff_id?: unknown;
+  final_price?: unknown;
+  created_at?: unknown;
+  paid_at?: unknown;
+}): StaffOrderRow {
+  const tariffId = o.tariff_id != null ? String(o.tariff_id) : "spotify";
+  return {
+    id: String(o.id),
+    status: String(o.status ?? "awaiting_payment"),
+    plan_id: tariffId,
+    price: Number(o.final_price ?? 0),
+    created_at: String(o.created_at ?? new Date().toISOString()),
+    payment_status: o.payment_status != null ? String(o.payment_status) : null,
+    paid_at: o.paid_at != null ? String(o.paid_at) : null,
+    plan_title: tariffId,
+  };
+}
+
+async function attachSubsTariffTitles(
+  subs: SupabaseClient,
+  list: StaffOrderRow[],
+): Promise<StaffOrderRow[]> {
+  const tariffIds = [...new Set(list.map((o) => o.plan_id).filter((id) => id && id !== "spotify"))];
+  if (!tariffIds.length) return list;
+  const { data: tariffs } = await subs
+    .from("tariffs")
+    .select("id, title, slug, category, duration_months")
+    .in("id", tariffIds);
+  const titleById = new Map<string, string>();
+  for (const t of tariffs ?? []) {
+    titleById.set(String(t.id), formatSubsTariffDisplayLabel(t));
+  }
+  return list.map((o) => ({
+    ...o,
+    plan_title: titleById.get(o.plan_id) ?? o.plan_title,
+  }));
+}
 
 function canonicalEmail(value: string | null | undefined): string {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -38,29 +95,6 @@ function deriveStageFromOrders(
   );
   if (waiting) return "waiting";
   return "other";
-}
-
-function pickFocusOrder<T extends { status: string; created_at: string }>(
-  list: T[],
-  siteSlug: "gpt-store" | "subs-store",
-): T | null {
-  if (!list.length) return null;
-  const inactive = siteSlug === "subs-store" ? SUBS_INACTIVE : GPT_INACTIVE;
-  const open = list.find((o) => !inactive.has(o.status));
-  return open ?? list[0] ?? null;
-}
-
-function resolveFocusOrder<T extends { id: string; status: string; created_at: string }>(
-  list: T[],
-  siteSlug: "gpt-store" | "subs-store",
-  preferredOrderId?: string | null,
-): T | null {
-  const preferred = preferredOrderId?.trim();
-  if (preferred) {
-    const hit = list.find((o) => o.id === preferred);
-    if (hit) return hit;
-  }
-  return pickFocusOrder(list, siteSlug);
 }
 
 function statusLabel(siteSlug: "gpt-store" | "subs-store", status: string): string {
@@ -99,30 +133,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Subs Store не подключён" }, { status: 503 });
     }
 
-    let list: {
-      id: string;
-      status: string;
-      plan_id: string;
-      price: number;
-      created_at: string;
-    }[] = [];
+    let list: StaffOrderRow[] = [];
 
     if (orderId && !userId && !email) {
       const { data: singleOrder } = await subs
         .from("orders")
-        .select("id, status, tariff_id, final_price, created_at, customer_email, account_email, user_id")
+        .select(SUBS_ORDER_SELECT)
         .eq("id", orderId)
         .maybeSingle();
       if (singleOrder) {
-        list = [
-          {
-            id: String(singleOrder.id),
-            status: String(singleOrder.status ?? "awaiting_payment"),
-            plan_id: String(singleOrder.tariff_id ?? "spotify"),
-            price: Number(singleOrder.final_price ?? 0),
-            created_at: String(singleOrder.created_at ?? new Date().toISOString()),
-          },
-        ];
+        list = await attachSubsTariffTitles(subs, [mapSubsOrderRow(singleOrder)]);
         const orderEmail =
           (singleOrder.customer_email as string | null)?.trim().toLowerCase() ??
           (singleOrder.account_email as string | null)?.trim().toLowerCase() ??
@@ -148,6 +168,7 @@ export async function GET(req: NextRequest) {
           focus_order: list[0] ?? null,
           active_order: list[0] ?? null,
           orders: list,
+          status_label: list[0] ? statusLabel(siteSlug, list[0].status) : null,
         });
       }
     }
@@ -155,44 +176,35 @@ export async function GET(req: NextRequest) {
     if (userId) {
       const { data: subsOrders } = await subs
         .from("orders")
-        .select("id, status, tariff_id, final_price, created_at")
+        .select(SUBS_ORDER_SELECT)
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(30);
-      list = (subsOrders ?? []).map((o) => ({
-        id: String(o.id),
-        status: String(o.status ?? "awaiting_payment"),
-        plan_id: String(o.tariff_id ?? "spotify"),
-        price: Number(o.final_price ?? 0),
-        created_at: String(o.created_at ?? new Date().toISOString()),
-      }));
+      list = await attachSubsTariffTitles(subs, (subsOrders ?? []).map(mapSubsOrderRow));
     } else if (email) {
       const [{ data: byCustomer }, { data: byAccount }] = await Promise.all([
         subs
           .from("orders")
-          .select("id, status, tariff_id, final_price, created_at")
+          .select(SUBS_ORDER_SELECT)
           .ilike("customer_email", email)
           .order("created_at", { ascending: false })
           .limit(30),
         subs
           .from("orders")
-          .select("id, status, tariff_id, final_price, created_at")
+          .select(SUBS_ORDER_SELECT)
           .ilike("account_email", email)
           .order("created_at", { ascending: false })
           .limit(30),
       ]);
-      const byId = new Map<string, (typeof list)[number]>();
+      const byId = new Map<string, StaffOrderRow>();
       for (const o of [...(byCustomer ?? []), ...(byAccount ?? [])]) {
-        byId.set(String(o.id), {
-          id: String(o.id),
-          status: String(o.status ?? "awaiting_payment"),
-          plan_id: String(o.tariff_id ?? "spotify"),
-          price: Number(o.final_price ?? 0),
-          created_at: String(o.created_at ?? new Date().toISOString()),
-        });
+        byId.set(String(o.id), mapSubsOrderRow(o));
       }
-      list = [...byId.values()].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      list = await attachSubsTariffTitles(
+        subs,
+        [...byId.values()].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        ),
       );
     } else {
       return NextResponse.json({
@@ -208,7 +220,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const focusOrder = resolveFocusOrder(list, siteSlug, orderId);
+    const focusOrder = resolveStaffFocusOrder(list, siteSlug, orderId);
     const derived = deriveStageFromOrders(list, siteSlug);
     const hasActive = list.some((o) => ["activated", "completed"].includes(o.status));
 
@@ -235,6 +247,7 @@ export async function GET(req: NextRequest) {
       focus_order: focusOrder,
       active_order: focusOrder,
       orders: list,
+      status_label: focusOrder ? statusLabel(siteSlug, focusOrder.status) : null,
     });
   }
 
@@ -337,22 +350,31 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const { data: orders } = await admin
+  const gptSiteId = await getSiteUUID("gpt-store");
+  let gptOrdersQuery = admin
     .from("orders")
     .select("id, status, plan_id, price, created_at, payment_provider, activated_at, expires_at")
     .eq("user_id", profile.id)
+    .not("product", "ilike", "spotify%")
     .order("created_at", { ascending: false })
     .limit(30);
+  if (gptSiteId) {
+    gptOrdersQuery = gptOrdersQuery.or(`site_id.eq.${gptSiteId},site_id.is.null`);
+  }
+  const { data: orders } = await gptOrdersQuery;
 
-  const list = (orders ?? []).map((o) => ({
+  const list: StaffOrderRow[] = (orders ?? []).map((o) => ({
     id: String(o.id),
     status: String(o.status),
     plan_id: String(o.plan_id),
     price: Number(o.price ?? 0),
     created_at: String(o.created_at),
+    payment_status: null,
+    paid_at: null,
+    plan_title: String(o.plan_id),
   }));
 
-  const focusOrder = resolveFocusOrder(list, siteSlug, orderId);
+  const focusOrder = resolveStaffFocusOrder(list, siteSlug, orderId);
   const derived = deriveStageFromOrders(list, siteSlug);
   const stage =
     profile.client_stage && STAGES.includes(profile.client_stage as (typeof STAGES)[number])

@@ -30,8 +30,10 @@ export function OrderStatusSelect({ orderId, initialStatus, onStatusChange }: Pr
 
   async function onChange(next: OrderStatus) {
     if (next === status) return;
+    const prev = status;
     setBusy(true);
     setErr(null);
+    setStatus(next);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}?site=gpt-store`, {
         method: "PATCH",
@@ -40,13 +42,14 @@ export function OrderStatusSelect({ orderId, initialStatus, onStatusChange }: Pr
       });
       const j = (await res.json()) as { error?: string };
       if (!res.ok) {
+        setStatus(prev);
         setErr(j.error ?? "Ошибка");
         return;
       }
-      setStatus(next);
       onStatusChange?.(next);
       router.refresh();
     } catch {
+      setStatus(prev);
       setErr("Сеть");
     } finally {
       setBusy(false);

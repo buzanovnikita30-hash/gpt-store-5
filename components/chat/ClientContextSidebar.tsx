@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ChatRoomListItem } from "@/types/chat-ui";
-import { Loader2, MessageCircle, ShoppingBag } from "lucide-react";
+import { Check, Copy, Loader2, MessageCircle, ShoppingBag } from "lucide-react";
 
 import { StaffOrderStatusSelect } from "@/components/admin/StaffOrderStatusSelect";
 import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
@@ -20,6 +20,9 @@ type OrderRow = {
   plan_id: string;
   price: number;
   created_at: string;
+  payment_status?: string | null;
+  paid_at?: string | null;
+  plan_title?: string;
 };
 
 type Summary = {
@@ -53,6 +56,13 @@ const STAGE_LABEL: Record<string, string> = {
   other: "Другое",
 };
 
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  pending: "Не оплачен",
+  paid: "Оплачен",
+  refunded: "Возврат",
+  failed: "Ошибка оплаты",
+};
+
 interface Props {
   room: ChatRoomListItem | null;
   staffBasePath: string;
@@ -63,6 +73,55 @@ interface Props {
 
 function statusLabel(siteSlug: "gpt-store" | "subs-store", status: string): string {
   return siteSlug === "subs-store" ? subsOrderStatusLabelRu(status) : gptOrderStatusLabelRu(status);
+}
+
+function paymentLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return PAYMENT_STATUS_LABEL[value] ?? value;
+}
+
+function formatRuDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "—";
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function OrderIdCopy({ orderId }: { orderId: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Order ID</p>
+      <div className="mt-0.5 flex items-start gap-1.5">
+        <p className="min-w-0 flex-1 break-all font-mono text-[11px] leading-snug text-gray-800">
+          {orderId}
+        </p>
+        <button
+          type="button"
+          className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+          title="Скопировать order_id"
+          aria-label="Скопировать order_id"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void navigator.clipboard.writeText(orderId).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+        >
+          {copied ? <Check size={12} className="text-[#10a37f]" /> : <Copy size={12} />}
+        </button>
+      </div>
+      {copied ? <p className="mt-0.5 text-[10px] text-[#10a37f]">Скопировано</p> : null}
+    </div>
+  );
 }
 
 export function ClientContextSidebar({
@@ -103,7 +162,10 @@ export function ClientContextSidebar({
           site: siteSlug,
         });
         if (!isSyntheticClient) params.set("userId", room.client_id);
-        const orderId = opts?.orderIdOverride || preferredOrderId || highlightOrderId || orderFromClient;
+        const orderId =
+          opts && "orderIdOverride" in opts
+            ? opts.orderIdOverride
+            : preferredOrderId || highlightOrderId || orderFromClient;
         if (orderId) params.set("orderId", orderId);
         const res = await fetch(`/api/staff/client-summary?${params.toString()}`, {
           credentials: "include",
@@ -159,6 +221,9 @@ export function ClientContextSidebar({
   const resolvedSite = data?.site_slug ?? siteSlug;
   const focusOrder = data?.focus_order ?? data?.active_order ?? null;
   const otherOrders = (data?.orders ?? []).filter((o) => o.id !== focusOrder?.id).slice(0, 5);
+  const focusIsPreferred = Boolean(
+    focusOrder && effectiveOrderId && focusOrder.id === effectiveOrderId,
+  );
 
   if (!room) {
     return (
@@ -183,6 +248,14 @@ export function ClientContextSidebar({
     `${staffBasePath.replace(/\/$/, "")}/clients?highlight=${encodeURIComponent(room.client_id)}`,
     resolvedSite,
   );
+  const openOrderHref = focusOrder
+    ? clientParam
+      ? staffNavHref(
+          `${staffBasePath}/orders?client=${encodeURIComponent(clientParam)}&highlight=${encodeURIComponent(focusOrder.id)}`,
+          resolvedSite,
+        )
+      : `${staffNavHref(`${staffBasePath}/orders`, resolvedSite)}&highlight=${encodeURIComponent(focusOrder.id)}`
+    : ordersHref;
 
   return (
     <aside className="hidden w-80 flex-shrink-0 flex-col border-l border-gray-100 bg-gray-50/90 xl:flex">
@@ -234,20 +307,34 @@ export function ClientContextSidebar({
                   <div
                     className={cn(
                       "rounded-xl border bg-white p-3",
-                      effectiveOrderId && focusOrder.id === effectiveOrderId
+                      focusIsPreferred
                         ? "border-[#10a37f] ring-2 ring-[#10a37f]/25"
                         : "border-gray-200",
                     )}
                   >
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      Текущий заказ
+                      {focusIsPreferred ? "Выбранный заказ" : "Последний заказ"}
                     </p>
                     <p className="mt-1 text-sm font-medium text-gray-900">
-                      {focusOrder.plan_id} · {focusOrder.price.toLocaleString("ru")} ₽
+                      {focusOrder.plan_title || focusOrder.plan_id} ·{" "}
+                      {focusOrder.price.toLocaleString("ru")} ₽
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">
-                      {statusLabel(resolvedSite, focusOrder.status)}
+                      Создан: {formatRuDateTime(focusOrder.created_at)}
                     </p>
+                    <OrderIdCopy orderId={focusOrder.id} />
+                    <div className="mt-2 space-y-0.5">
+                      <p className="text-xs text-gray-900">
+                        <span className="text-gray-400">Статус заказа: </span>
+                        {statusLabel(resolvedSite, focusOrder.status)}
+                      </p>
+                      {paymentLabel(focusOrder.payment_status) ? (
+                        <p className="text-xs text-gray-900">
+                          <span className="text-gray-400">Статус оплаты: </span>
+                          {paymentLabel(focusOrder.payment_status)}
+                        </p>
+                      ) : null}
+                    </div>
                     <div className="mt-3">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                         Сменить статус
@@ -261,31 +348,42 @@ export function ClientContextSidebar({
                         }}
                       />
                     </div>
-                    <Link
-                      href={
-                        clientParam
-                          ? `${staffNavHref(
-                              `${staffBasePath}/orders?client=${encodeURIComponent(clientParam)}&highlight=${encodeURIComponent(focusOrder.id)}`,
-                              resolvedSite,
-                            )}`
-                          : `${staffNavHref(`${staffBasePath}/orders`, resolvedSite)}&highlight=${encodeURIComponent(focusOrder.id)}`
-                      }
-                      className="mt-3 inline-flex items-center rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
-                    >
-                      Открыть заказ
-                    </Link>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Link
+                        href={openOrderHref}
+                        className="inline-flex items-center rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10a37f]/40"
+                      >
+                        Открыть заказ
+                      </Link>
+                      {preferredOrderId ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:underline"
+                          onClick={() => {
+                            setPreferredOrderId(null);
+                            void loadSummary({ silent: true, orderIdOverride: null });
+                          }}
+                        >
+                          К последнему заказу
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
                 {otherOrders.length > 0 ? (
                   <div>
-                    <p className="text-xs text-gray-400">Другие заказы</p>
+                    <p className="text-xs text-gray-400">Другие заказы клиента</p>
                     <ul className="mt-1 space-y-1.5">
                       {otherOrders.map((o) => (
                         <li key={o.id} className="rounded-lg border border-gray-100 bg-white px-2.5 py-1.5 text-xs">
                           <p className="font-medium text-gray-800">
-                            {o.plan_id} · {o.price.toLocaleString("ru")} ₽
+                            {(o.plan_title || o.plan_id)} · {o.price.toLocaleString("ru")} ₽
                           </p>
                           <p className="text-gray-500">{statusLabel(resolvedSite, o.status)}</p>
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            {formatRuDateTime(o.created_at)}
+                          </p>
+                          <p className="mt-0.5 break-all font-mono text-[10px] text-gray-500">{o.id}</p>
                           <button
                             type="button"
                             className="mt-1 text-[11px] font-medium text-[#10a37f] hover:underline"
@@ -294,7 +392,7 @@ export function ClientContextSidebar({
                               void loadSummary({ silent: true, orderIdOverride: o.id });
                             }}
                           >
-                            Сделать текущим
+                            Показать этот заказ
                           </button>
                         </li>
                       ))}
