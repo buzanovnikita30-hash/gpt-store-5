@@ -80,6 +80,14 @@ function paymentLabel(value: string | null | undefined): string | null {
   return PAYMENT_STATUS_LABEL[value] ?? value;
 }
 
+/** Never show raw tariff/plan UUID as the human order title (confuses with order_id). */
+function planDisplayLabel(order: OrderRow): string {
+  const title = order.plan_title?.trim();
+  if (title && title !== order.plan_id) return title;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(order.plan_id)) return "Тариф";
+  return order.plan_id || "—";
+}
+
 function formatRuDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -225,6 +233,17 @@ export function ClientContextSidebar({
     focusOrder && effectiveOrderId && focusOrder.id === effectiveOrderId,
   );
 
+  if (process.env.NODE_ENV === "development" && data?.orders?.length) {
+    const ids = data.orders.map((o) => o.id);
+    const unique = new Set(ids);
+    if (unique.size !== ids.length) {
+      console.warn("[ClientContextSidebar] duplicate order ids in client summary");
+    }
+    if (focusOrder && otherOrders.some((o) => o.id === focusOrder.id)) {
+      console.warn("[ClientContextSidebar] focus order leaked into otherOrders");
+    }
+  }
+
   if (!room) {
     return (
       <div className="hidden w-72 flex-shrink-0 border-l border-gray-100 bg-gray-50/80 p-4 text-sm text-gray-500 xl:block">
@@ -316,7 +335,7 @@ export function ClientContextSidebar({
                       {focusIsPreferred ? "Выбранный заказ" : "Последний заказ"}
                     </p>
                     <p className="mt-1 text-sm font-medium text-gray-900">
-                      {focusOrder.plan_title || focusOrder.plan_id} ·{" "}
+                      {planDisplayLabel(focusOrder)} ·{" "}
                       {focusOrder.price.toLocaleString("ru")} ₽
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">
@@ -377,13 +396,25 @@ export function ClientContextSidebar({
                       {otherOrders.map((o) => (
                         <li key={o.id} className="rounded-lg border border-gray-100 bg-white px-2.5 py-1.5 text-xs">
                           <p className="font-medium text-gray-800">
-                            {(o.plan_title || o.plan_id)} · {o.price.toLocaleString("ru")} ₽
+                            {planDisplayLabel(o)} · {o.price.toLocaleString("ru")} ₽
                           </p>
-                          <p className="text-gray-500">{statusLabel(resolvedSite, o.status)}</p>
+                          <p className="text-gray-500">
+                            <span className="text-gray-400">Статус заказа: </span>
+                            {statusLabel(resolvedSite, o.status)}
+                          </p>
+                          {paymentLabel(o.payment_status) ? (
+                            <p className="text-gray-500">
+                              <span className="text-gray-400">Оплата: </span>
+                              {paymentLabel(o.payment_status)}
+                            </p>
+                          ) : null}
                           <p className="mt-0.5 text-[10px] text-gray-400">
                             {formatRuDateTime(o.created_at)}
                           </p>
-                          <p className="mt-0.5 break-all font-mono text-[10px] text-gray-500">{o.id}</p>
+                          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            Order ID
+                          </p>
+                          <p className="break-all font-mono text-[10px] text-gray-700">{o.id}</p>
                           <button
                             type="button"
                             className="mt-1 text-[11px] font-medium text-[#10a37f] hover:underline"

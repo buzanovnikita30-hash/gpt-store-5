@@ -101,15 +101,19 @@ export async function loadGptDashboardPeriodStats(
   const fromIso = period.fromIso;
   const toIso = period.toIso;
 
+  // Do NOT select plan_name: column may be absent in production GPT DB.
+  // Missing column → PostgREST error → null data → silent zero KPIs.
+  const gptOrderSelect = "id, status, plan_id, product, price, created_at, paid_at";
+
   let createdQ = admin
     .from("orders")
-    .select("id, status, plan_id, plan_name, product, price, created_at, paid_at")
+    .select(gptOrderSelect)
     .not("product", "ilike", "spotify%");
   createdQ = applyCreatedRange(createdQ, fromIso, toIso);
 
   let paidPoolQ = admin
     .from("orders")
-    .select("id, status, plan_id, plan_name, product, price, created_at, paid_at")
+    .select(gptOrderSelect)
     .not("product", "ilike", "spotify%")
     .in("status", [...GPT_PAID_STATUSES, ...GPT_REFUNDED]);
   // Broad fetch then filter by effective payment date in JS (paid_at ?? created_at).
@@ -118,15 +122,21 @@ export async function loadGptDashboardPeriodStats(
     paidPoolQ = paidPoolQ.gte("created_at", earliest);
   }
 
-  const [{ data: createdRows }, { data: paidPool }] = await Promise.all([createdQ, paidPoolQ]);
+  const [createdRes, paidRes] = await Promise.all([createdQ, paidPoolQ]);
+  if (createdRes.error) {
+    throw new Error(`GPT dashboard created query failed: ${createdRes.error.message}`);
+  }
+  if (paidRes.error) {
+    throw new Error(`GPT dashboard paid query failed: ${paidRes.error.message}`);
+  }
 
-  const createdList = createdRows ?? [];
-  const paidList = (paidPool ?? []).filter(
+  const createdList = createdRes.data ?? [];
+  const paidList = (paidRes.data ?? []).filter(
     (o) =>
       GPT_PAID_STATUSES.includes(o.status as (typeof GPT_PAID_STATUSES)[number]) &&
       inPaidWindow(o.paid_at, o.created_at, fromIso, toIso),
   );
-  const refundedList = (paidPool ?? []).filter(
+  const refundedList = (paidRes.data ?? []).filter(
     (o) =>
       o.status === "refunded" && inPaidWindow(o.paid_at, o.created_at, fromIso, toIso),
   );
@@ -253,14 +263,20 @@ export async function loadSubsDashboardPeriodStats(
     paidPoolQ = paidPoolQ.gte("created_at", earliest);
   }
 
-  const [{ data: createdRows }, { data: paidPool }] = await Promise.all([createdQ, paidPoolQ]);
-  const createdList = createdRows ?? [];
-  const paidList = (paidPool ?? []).filter(
+  const [createdRes, paidRes] = await Promise.all([createdQ, paidPoolQ]);
+  if (createdRes.error) {
+    throw new Error(`Subs dashboard created query failed: ${createdRes.error.message}`);
+  }
+  if (paidRes.error) {
+    throw new Error(`Subs dashboard paid query failed: ${paidRes.error.message}`);
+  }
+  const createdList = createdRes.data ?? [];
+  const paidList = (paidRes.data ?? []).filter(
     (o) =>
       o.payment_status === SUBS_PAID_PAYMENT &&
       inPaidWindow(o.paid_at, o.created_at, fromIso, toIso),
   );
-  const refundedList = (paidPool ?? []).filter(
+  const refundedList = (paidRes.data ?? []).filter(
     (o) =>
       o.payment_status === SUBS_REFUNDED_PAYMENT &&
       inPaidWindow(o.paid_at, o.created_at, fromIso, toIso),

@@ -274,6 +274,8 @@ export default async function AdminOverviewPage({
       {periodStats ? (
         <>
           <p className="mb-3 text-sm text-gray-600">
+            Магазин: <span className="font-medium text-gray-900">{site.brandName}</span>
+            {" · "}
             Период: <span className="font-medium text-gray-900">{period.label}</span>
             {" · "}
             Оплачено{" "}
