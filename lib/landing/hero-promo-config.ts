@@ -57,7 +57,7 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     promoTitle: "Скидка 10% · до 31 августа",
     periodBadge: "1–31 августа",
     offerHeadline: "Готовый аккаунт уже с активным ChatGPT Plus",
-    offerSubline: "Получите данные для входа после оформления",
+    offerSubline: null,
     monthlyHint: null,
     terms: [
       "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
