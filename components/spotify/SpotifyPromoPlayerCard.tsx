@@ -1,74 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   CalendarDays,
   Check,
   Clock3,
   Flame,
-  Pause,
   Percent,
   PiggyBank,
-  Play,
 } from "lucide-react";
 import { SPOTIFY_ACCENT } from "@/lib/content/spotify";
 import { ConnectCheckoutButton } from "@/components/checkout/ConnectCheckoutButton";
 import { HeroPromoTermsPopover } from "@/components/landing/HeroPromoTermsPopover";
 import { cn } from "@/lib/utils";
-
-const WAVE_BARS = [36, 62, 48, 78, 42, 88, 55, 70, 46, 82, 38, 66, 52, 74, 58];
-
-function MusicVisual({
-  playing,
-  compact,
-  reduceMotion,
-}: {
-  playing: boolean;
-  compact?: boolean;
-  reduceMotion: boolean | null;
-}) {
-  return (
-    <div
-      className={cn(
-        "relative flex w-full items-end overflow-hidden rounded-xl px-3",
-        compact ? "h-14 py-2 opacity-80" : "h-20 py-3",
-      )}
-      style={{
-        background: "linear-gradient(180deg, rgba(29,185,84,0.1) 0%, rgba(29,185,84,0.02) 100%)",
-        border: "1px solid rgba(29,185,84,0.18)",
-      }}
-      aria-hidden
-    >
-      <div className="relative flex h-full w-full items-end justify-between gap-1">
-        {WAVE_BARS.map((h, i) => (
-          <motion.div
-            key={i}
-            className="max-w-[12px] flex-1 origin-bottom rounded-full"
-            style={{
-              background: SPOTIFY_ACCENT,
-              height: `${compact ? h * 0.7 : h}%`,
-              opacity: 0.55 + (i % 3) * 0.1,
-            }}
-            animate={playing && !reduceMotion ? { scaleY: [1, 1.25, 0.75, 1.15, 1] } : { scaleY: 1 }}
-            transition={
-              playing && !reduceMotion
-                ? {
-                    duration: 1.1 + (i % 4) * 0.25,
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                    ease: "easeInOut",
-                    delay: i * 0.06,
-                  }
-                : { duration: 0.2 }
-            }
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export type SpotifyHeroPromoUi = {
   originalPrice: number;
@@ -119,12 +64,7 @@ export function SpotifyPromoPlayerCard({
   const wide = size === "wide";
   const spacious = size === "large" || wide;
   const reduceMotion = useReducedMotion();
-  const [playing, setPlaying] = useState(false);
   const hasPromo = Boolean(promo && promo.originalPrice > priceRub);
-
-  useEffect(() => {
-    return () => setPlaying(false);
-  }, []);
 
   const shellStyle =
     variant === "glass"
@@ -218,28 +158,6 @@ export function SpotifyPromoPlayerCard({
               {promo.offerHeadline}
             </p>
           ) : null}
-        </div>
-
-        <div className="relative">
-          <MusicVisual playing={playing} compact={hasPromo} reduceMotion={reduceMotion} />
-          <button
-            type="button"
-            onClick={() => setPlaying((v) => !v)}
-            className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full text-white transition-transform hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{
-              background: SPOTIFY_ACCENT,
-              boxShadow: "0 0 14px rgba(29,185,84,0.4)",
-              outlineColor: SPOTIFY_ACCENT,
-            }}
-            aria-label={playing ? "Остановить анимацию" : "Запустить анимацию"}
-            aria-pressed={playing}
-          >
-            {playing ? (
-              <Pause className="h-3.5 w-3.5" fill="white" aria-hidden />
-            ) : (
-              <Play className="ml-0.5 h-3.5 w-3.5" fill="white" aria-hidden />
-            )}
-          </button>
         </div>
 
         <div className="flex items-end justify-between gap-3" aria-label="Цена">
