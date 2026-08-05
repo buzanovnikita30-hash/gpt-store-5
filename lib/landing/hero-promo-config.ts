@@ -31,11 +31,13 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
   },
   spotify: {
     enabled: true,
-    featuredPlanId: "spotify-ind-3m",
-    promoSalePrice: 1090,
-    promoOriginalPrice: 1290,
-    discountLabel: "−10%",
-    fallbackDiscountPercent: 10,
+    /** Главный Hero Offer на лендинге Spotify Store */
+    featuredPlanId: "spotify-duo-3m",
+    promoSalePrice: 1690,
+    promoOriginalPrice: 1990,
+    discountLabel: "−15%",
+    fallbackDiscountPercent: 15,
+    /** Сезонная фикс-цена; после deadline карточка берёт актуальную цену тарифа из БД/конфига */
     deadline: { year: 2026, month: 6, day: 30 },
     promoTitle: "Летняя акция",
   },

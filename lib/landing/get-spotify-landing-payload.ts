@@ -3,8 +3,10 @@ import { cache } from "react";
 
 import { createSubsStoreAdminClient } from "@/lib/supabase/subs-store-admin";
 import { getSubsStoreConfig } from "@/lib/subs-store-config";
-import { getStaticSpotifyLandingPayload, minIndividualPrice } from "./spotify-landing-static-payload";
+import { getStaticSpotifyLandingPayload } from "./spotify-landing-static-payload";
 import { normalizeSpotifyLandingPayloadLabels } from "./normalize-spotify-landing-labels";
+import { buildSpotifyHeroPlayerPreview } from "@/lib/spotify/build-hero-player-preview";
+import { resolveHeroCheckoutPlan } from "@/lib/spotify/resolve-hero-checkout-plan";
 
 import { defaultSpotifySeoTitle, normalizeSpotifyStoreLabel } from "@/lib/brand/spotify-store-brand";
 import { getSpotifyPublicReviews } from "@/lib/reviews/spotifyPublicReviews";
@@ -198,7 +200,10 @@ function buildPageDataFromSnapshot(
 
     if (commerce.plans.length) {
       payload.plans = commerce.plans;
-      payload.heroPlayerPreview.priceRub = minIndividualPrice(commerce.plans);
+      const featured = resolveHeroCheckoutPlan(commerce.plans);
+      if (featured) {
+        payload.heroPlayerPreview = buildSpotifyHeroPlayerPreview(featured);
+      }
     }
 
     if (snapshot.faq.length) {
@@ -211,6 +216,18 @@ function buildPageDataFromSnapshot(
     const rawOverrides = snapshot.settings["spotify_landing_overrides"];
     if (isPlainObject(rawOverrides)) {
       payload = mergeLandingPayload(payload, rawOverrides as SpotifyLandingOverrides);
+    }
+
+    // Featured tariff wins over CMS overrides for price/title (keeps checkout ↔ hero in sync).
+    if (payload.plans.length) {
+      const featured = resolveHeroCheckoutPlan(payload.plans);
+      if (featured) {
+        const built = buildSpotifyHeroPlayerPreview(featured);
+        payload.heroPlayerPreview = {
+          ...built,
+          cardBadge: payload.heroPlayerPreview.cardBadge?.trim() || built.cardBadge,
+        };
+      }
     }
   }
 

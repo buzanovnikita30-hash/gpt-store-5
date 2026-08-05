@@ -12,6 +12,7 @@ import {
 } from "@/lib/content/spotify";
 import { scrollToSpotifyPricing } from "@/lib/spotify/scroll-to-pricing";
 import { resolveHeroCheckoutPlan } from "@/lib/spotify/resolve-hero-checkout-plan";
+import { buildSpotifyHeroPlayerPreview } from "@/lib/spotify/build-hero-player-preview";
 import { reachLandingGoal } from "@/lib/analytics/reach-landing-goal";
 import { useLandingHeroAb } from "@/lib/analytics/landing-hero-ab";
 import { SpotifyPromoPlayerCard } from "@/components/spotify/SpotifyPromoPlayerCard";
@@ -29,8 +30,24 @@ export function SpotifyHero() {
   const badge = heroAb === "h1" ? SPOTIFY_HERO_BADGE_NO_TIMING : SPOTIFY_HERO_BADGE_WITH_TIMING;
   const accentTitle =
     heroAb === "h1" ? SPOTIFY_HERO_ACCENT_WITH_TIMING : SPOTIFY_HERO_ACCENT_BASE;
-  const player = heroPlayerPreview;
   const checkoutPlan = useMemo(() => resolveHeroCheckoutPlan(plans), [plans]);
+  const player = useMemo(() => {
+    if (checkoutPlan) {
+      const fromPlan = buildSpotifyHeroPlayerPreview(checkoutPlan);
+      return {
+        ...fromPlan,
+        // Keep CMS override for badge only if set; title/price always from featured tariff.
+        cardBadge: heroPlayerPreview.cardBadge || fromPlan.cardBadge,
+      };
+    }
+    return heroPlayerPreview;
+  }, [checkoutPlan, heroPlayerPreview]);
+
+  const ctaLabel =
+    checkoutPlan?.ctaText?.trim() ||
+    (checkoutPlan
+      ? `Подключить за ${checkoutPlan.price.toLocaleString("ru")} ₽`
+      : hero.primaryCta);
 
   const cardProps = {
     badge: player.cardBadge,
@@ -39,9 +56,10 @@ export function SpotifyHero() {
     fromLabel: player.fromLabel,
     priceRub: player.priceRub,
     featureChips: player.featureChips,
-    ctaLabel: hero.primaryCta,
+    ctaLabel,
     planId: checkoutPlan?.id ?? null,
     planName: checkoutPlan?.name ?? null,
+    tierLabel: checkoutPlan?.tab === "duo" ? "Duo" : checkoutPlan?.tab === "family" ? "Family" : "Premium",
     variant: "glass" as const,
   };
 

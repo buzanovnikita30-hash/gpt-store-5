@@ -78,6 +78,8 @@ export type SpotifyPromoPlayerCardProps = {
   ctaLabel?: string;
   planId: string | null;
   planName?: string | null;
+  /** Pill next to price (Premium / Duo / Family) */
+  tierLabel?: string;
   variant?: "glass" | "solid";
   size?: "default" | "large" | "wide";
   className?: string;
@@ -93,6 +95,7 @@ export function SpotifyPromoPlayerCard({
   ctaLabel,
   planId,
   planName,
+  tierLabel = "Premium",
   variant = "solid",
   size = "default",
   className,
@@ -205,7 +208,7 @@ export function SpotifyPromoPlayerCard({
               className="text-[11px] font-medium uppercase tracking-[0.14em]"
               style={{ color: "rgba(255,255,255,0.45)" }}
             >
-              {fromLabel}
+              {fromLabel || "\u00A0"}
             </p>
             <p className={cn("mt-0.5 font-heading font-bold leading-none text-white", spacious ? "text-4xl" : "text-3xl")}>
               {priceRub.toLocaleString("ru")}
@@ -222,7 +225,7 @@ export function SpotifyPromoPlayerCard({
               color: SPOTIFY_ACCENT,
             }}
           >
-            Premium
+            {tierLabel}
           </span>
         </div>
 

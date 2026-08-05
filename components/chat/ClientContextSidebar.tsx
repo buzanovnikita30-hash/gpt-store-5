@@ -10,6 +10,7 @@ import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
 import { subsOrderStatusLabelRu } from "@/lib/admin/subs-order-status-labels";
 import { buildOrdersClientParam } from "@/lib/admin/orders-client-filter";
 import { staffNavHref } from "@/lib/admin/staffNavHref";
+import { getSiteBySlug } from "@/lib/sites";
 import { createClient } from "@/lib/supabase/client";
 import { tryCreateSubsBrowserClient } from "@/lib/supabase/subs-browser-client";
 import { cn } from "@/lib/utils";
@@ -227,6 +228,7 @@ export function ClientContextSidebar({
   }, [room?.client_id, siteSlug, loadSummary]);
 
   const resolvedSite = data?.site_slug ?? siteSlug;
+  const siteBrand = getSiteBySlug(resolvedSite).brandName;
   const focusOrder = data?.focus_order ?? data?.active_order ?? null;
   const otherOrders = (data?.orders ?? []).filter((o) => o.id !== focusOrder?.id).slice(0, 5);
   const focusIsPreferred = Boolean(
@@ -332,7 +334,7 @@ export function ClientContextSidebar({
                     )}
                   >
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      {focusIsPreferred ? "Выбранный заказ" : "Последний заказ"}
+                      {focusIsPreferred ? "Выбранный заказ" : "Последний созданный заказ"}
                     </p>
                     <p className="mt-1 text-sm font-medium text-gray-900">
                       {planDisplayLabel(focusOrder)} ·{" "}
@@ -341,16 +343,24 @@ export function ClientContextSidebar({
                     <p className="mt-0.5 text-xs text-gray-500">
                       Создан: {formatRuDateTime(focusOrder.created_at)}
                     </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Магазин: <span className="font-medium text-gray-800">{siteBrand}</span>
+                    </p>
                     <OrderIdCopy orderId={focusOrder.id} />
                     <div className="mt-2 space-y-0.5">
                       <p className="text-xs text-gray-900">
-                        <span className="text-gray-400">Статус заказа: </span>
+                        <span className="text-gray-400">Статус выполнения: </span>
                         {statusLabel(resolvedSite, focusOrder.status)}
                       </p>
                       {paymentLabel(focusOrder.payment_status) ? (
                         <p className="text-xs text-gray-900">
                           <span className="text-gray-400">Статус оплаты: </span>
                           {paymentLabel(focusOrder.payment_status)}
+                        </p>
+                      ) : resolvedSite === "gpt-store" ? (
+                        <p className="text-xs text-gray-500">
+                          <span className="text-gray-400">Оплата: </span>
+                          по статусу заказа (GPT)
                         </p>
                       ) : null}
                     </div>

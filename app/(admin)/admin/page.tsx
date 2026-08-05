@@ -194,9 +194,24 @@ export default async function AdminOverviewPage({
       pendingReviews = reviewsRes.count ?? 0;
       totalClients = clientsCount;
       unreadClientMsgs = (unreadRes as { count?: number | null }).count ?? 0;
-    } catch {
+    } catch (err) {
+      console.error("[admin/dashboard] GPT period stats failed", {
+        message: err instanceof Error ? err.message : String(err),
+        site: siteSlug,
+        period: period.preset,
+        from: period.fromIso,
+        to: period.toIso,
+      });
+      // Keep analytics if only secondary counters failed: re-fetch period stats alone.
+      try {
+        periodStats = await loadGptDashboardPeriodStats(admin, period);
+      } catch (statsErr) {
+        console.error("[admin/dashboard] GPT analytics retry failed", {
+          message: statsErr instanceof Error ? statsErr.message : String(statsErr),
+        });
+        periodStats = null;
+      }
       overview = await loadAdminOverviewStats(admin, new Date(), "gpt-store");
-      periodStats = null;
       statsLoadFailed = true;
     }
     revenueFootnote =

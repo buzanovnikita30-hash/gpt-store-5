@@ -15,6 +15,8 @@ import {
 } from "@/lib/content/spotify";
 
 import { applyHeroPromoDisplayToSpotifyPlans } from "@/lib/landing/hero-promo-landing-discount";
+import { buildSpotifyHeroPlayerPreview } from "@/lib/spotify/build-hero-player-preview";
+import { resolveHeroCheckoutPlan } from "@/lib/spotify/resolve-hero-checkout-plan";
 import type { SpotifyLandingPayload } from "./spotify-landing-types";
 
 const HOW_ICON_KEYS = ["music", "credit_card", "shield", "headphones"] as const;
@@ -44,17 +46,21 @@ export function getStaticSpotifyLandingPayload(): SpotifyLandingPayload {
   }));
   const supportHandle = "@subs_support";
   const supportTelegramUrl = telegramUrlFromSupportUsername(supportHandle);
+  const featured = resolveHeroCheckoutPlan(SPOTIFY_PLANS);
+  const heroPlayerPreview = featured
+    ? buildSpotifyHeroPlayerPreview(featured)
+    : {
+        cardBadge: "SPOTIFY STORE",
+        cardTitle: "Premium для двоих",
+        cardSubtitle: "3 месяца",
+        fromLabel: "",
+        priceRub: 1690,
+        featureChips: ["2 профиля", "Без рекламы", "Поддержка"],
+      };
 
   return {
     hero: { ...SPOTIFY_HERO },
-    heroPlayerPreview: {
-      cardBadge: "SPOTIFY STORE",
-      cardTitle: "Spotify Premium",
-      cardSubtitle: "Активация 10–15 минут",
-      fromLabel: "От",
-      priceRub: minIndividualPrice(SPOTIFY_PLANS),
-      featureChips: ["Без рекламы", "Офлайн", "Поддержка"],
-    },
+    heroPlayerPreview,
     tickerItems: [...SPOTIFY_TICKER_ITEMS],
     howItWorksSection: {
       eyebrow: "Процесс подключения",
