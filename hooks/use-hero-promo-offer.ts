@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { HERO_PROMO_CONFIG, type HeroPromoSiteKey } from "@/lib/landing/hero-promo-config";
-import { getDaysUntilPromoDeadline, type PromoDeadline } from "@/lib/landing/promo-deadline";
+import { getDaysUntilPromoDeadline, isPromoWindowActive } from "@/lib/landing/promo-deadline";
 import {
   resolveGptHeroPromoOffer,
   resolveSpotifyHeroPromoOffer,
@@ -40,32 +40,16 @@ export type HeroPromoState = {
   daysLeft: number;
   deadlineLabel: string;
   promoTitle: string;
+  promoActive: boolean;
   loading: boolean;
 };
-
-function deadlineLabelFrom(deadline: PromoDeadline): string {
-  const months = [
-    "января",
-    "февраля",
-    "марта",
-    "апреля",
-    "мая",
-    "июня",
-    "июля",
-    "августа",
-    "сентября",
-    "октября",
-    "ноября",
-    "декабря",
-  ];
-  return `${deadline.day} ${months[deadline.month - 1] ?? "июня"}`;
-}
 
 export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
   const config = HERO_PROMO_CONFIG[site];
   const [daysLeft, setDaysLeft] = useState(() =>
     getDaysUntilPromoDeadline(config.deadline),
   );
+  const [promoActive, setPromoActive] = useState(() => isPromoWindowActive(config.window));
   const [gptPlans, setGptPlans] = useState<GptPlanRow[]>(() =>
     PLUS_PLANS_NEW.map((p) => ({
       id: p.id,
@@ -91,11 +75,14 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const tick = () => setDaysLeft(getDaysUntilPromoDeadline(config.deadline));
+    const tick = () => {
+      setDaysLeft(getDaysUntilPromoDeadline(config.deadline));
+      setPromoActive(isPromoWindowActive(config.window));
+    };
     tick();
     const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
-  }, [config.deadline]);
+  }, [config.deadline, config.window]);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,8 +119,6 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
   }, [site]);
 
   const offer = useMemo(() => {
-    // Layout must never collapse when the seasonal promo window ends:
-    // still resolve the featured plan card (with or without discount).
     if (!config.enabled) return null;
 
     if (site === "gpt") {
@@ -148,13 +133,14 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
         Boolean(p.id && p.name && typeof p.price === "number"),
     );
     return resolveSpotifyHeroPromoOffer(plans, discounts, config);
-  }, [config, daysLeft, discounts, gptPlans, site, spotifyPlans]);
+  }, [config, discounts, gptPlans, site, spotifyPlans]);
 
   return {
     offer,
     daysLeft,
-    deadlineLabel: deadlineLabelFrom(config.deadline),
+    deadlineLabel: "31 августа",
     promoTitle: config.promoTitle,
+    promoActive: Boolean(offer?.promoActive ?? promoActive),
     loading,
   };
 }

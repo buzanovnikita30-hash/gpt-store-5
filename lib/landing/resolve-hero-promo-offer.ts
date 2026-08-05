@@ -1,9 +1,14 @@
 import { applyLandingDiscount, pickLandingDiscount, type LandingDiscount } from "@/lib/pricing-helpers";
-import { heroPromoFixedDisplay, type HeroPromoSiteConfig } from "@/lib/landing/hero-promo-config";
-import { isPromoDeadlineActive } from "@/lib/landing/promo-deadline";
+import {
+  heroPromoFixedDisplay,
+  heroPromoPeriodLabel,
+  type HeroPromoSiteConfig,
+} from "@/lib/landing/hero-promo-config";
+import { isPromoWindowActive } from "@/lib/landing/promo-deadline";
 
-function activeFixedPromo(config: HeroPromoSiteConfig) {
-  if (!isPromoDeadlineActive(config.deadline)) return null;
+function activeFixedPromo(config: HeroPromoSiteConfig, now = new Date()) {
+  if (!config.enabled) return null;
+  if (!isPromoWindowActive(config.window, now)) return null;
   return heroPromoFixedDisplay(config);
 }
 
@@ -15,8 +20,17 @@ export type HeroPromoOffer = {
   salePrice: number;
   discountLabel: string | null;
   discountPercent: number;
+  savingsRub: number;
   checkoutHref: string;
   ctaLabel: string;
+  /** Акция активна (окно дат) — показывать strikethrough/бейджи/countdown */
+  promoActive: boolean;
+  offerHeadline: string | null;
+  offerSubline: string | null;
+  monthlyHint: string | null;
+  periodBadge: string | null;
+  promoBanner: string | null;
+  terms: string[];
 };
 
 type GptPlanLike = {
@@ -61,12 +75,31 @@ function resolvePrices(
   explicitOriginal: number | undefined,
   explicitDiscountName: string | null | undefined,
   config: HeroPromoSiteConfig,
-): { original: number; sale: number; label: string | null } {
+  now: Date,
+): { original: number; sale: number; label: string | null; promoActive: boolean; savingsRub: number } {
+  // August campaign wins for featured plan while window is open.
+  const fixed = activeFixedPromo(config, now);
+  if (fixed && planId === config.featuredPlanId) {
+    return {
+      original: fixed.original,
+      sale: fixed.sale,
+      label: fixed.label,
+      promoActive: true,
+      savingsRub: fixed.savingsRub,
+    };
+  }
+
   const landing = pickLandingDiscount(planId, productId, discounts);
   if (landing) {
     const { displayPrice, cut, name } = applyLandingDiscount(basePrice, landing);
     if (cut > 0 && displayPrice < basePrice) {
-      return { original: basePrice, sale: displayPrice, label: name ?? explicitDiscountName ?? null };
+      return {
+        original: basePrice,
+        sale: displayPrice,
+        label: name ?? explicitDiscountName ?? null,
+        promoActive: true,
+        savingsRub: basePrice - displayPrice,
+      };
     }
   }
 
@@ -75,52 +108,100 @@ function resolvePrices(
       original: explicitOriginal,
       sale: basePrice,
       label: explicitDiscountName ?? null,
+      promoActive: true,
+      savingsRub: explicitOriginal - basePrice,
     };
   }
 
-  const fixed = activeFixedPromo(config);
-  if (fixed) {
-    return fixed;
-  }
+  return { original: basePrice, sale: basePrice, label: null, promoActive: false, savingsRub: 0 };
+}
 
-  return { original: basePrice, sale: basePrice, label: null };
+function buildOfferBase(
+  config: HeroPromoSiteConfig,
+  promoActive: boolean,
+): Pick<
+  HeroPromoOffer,
+  "offerHeadline" | "offerSubline" | "monthlyHint" | "periodBadge" | "promoBanner" | "terms"
+> {
+  if (!promoActive) {
+    return {
+      offerHeadline: null,
+      offerSubline: null,
+      monthlyHint: null,
+      periodBadge: null,
+      promoBanner: null,
+      terms: [],
+    };
+  }
+  return {
+    offerHeadline: config.offerHeadline,
+    offerSubline: config.offerSubline,
+    monthlyHint: config.monthlyHint,
+    periodBadge: heroPromoPeriodLabel(config),
+    promoBanner: config.promoTitle,
+    terms: config.terms,
+  };
 }
 
 export function resolveGptHeroPromoOffer(
   plans: GptPlanLike[],
   discounts: LandingDiscount[],
   config: HeroPromoSiteConfig,
+  now = new Date(),
 ): HeroPromoOffer | null {
   const plan = plans.find((p) => p.id === config.featuredPlanId);
   if (!plan) return null;
 
-  const preAppliedOriginal = plan.original_price;
-  const preAppliedSale = plan.price;
-  const hasPreApplied = preAppliedOriginal != null && preAppliedOriginal > preAppliedSale;
+  const fixed = activeFixedPromo(config, now);
+  let original: number;
+  let sale: number;
+  let label: string | null;
+  let promoActive: boolean;
+  let savingsRub: number;
 
-  const { original, sale, label } = hasPreApplied
-    ? {
-        original: preAppliedOriginal!,
-        sale: preAppliedSale,
-        label: plan.landing_discount_name ?? config.discountLabel,
-      }
-    : hasRealAdminLandingDiscount(plan.price, plan.id, plan.productId, discounts)
-      ? resolvePrices(
-          plan.price,
-          plan.id,
-          plan.productId,
-          discounts,
-          preAppliedOriginal,
-          plan.landing_discount_name,
-          config,
-        )
-      : (activeFixedPromo(config) ?? { original: plan.price, sale: plan.price, label: null });
+  if (fixed) {
+    original = fixed.original;
+    sale = fixed.sale;
+    label = fixed.label;
+    promoActive = true;
+    savingsRub = fixed.savingsRub;
+  } else {
+    const preAppliedOriginal = plan.original_price;
+    const preAppliedSale = plan.price;
+    const hasPreApplied = preAppliedOriginal != null && preAppliedOriginal > preAppliedSale;
+    if (hasPreApplied) {
+      original = preAppliedOriginal!;
+      sale = preAppliedSale;
+      label = plan.landing_discount_name ?? null;
+      promoActive = false; // outside campaign window — don't show August chrome
+      savingsRub = original - sale;
+    } else if (hasRealAdminLandingDiscount(plan.price, plan.id, plan.productId, discounts)) {
+      const resolved = resolvePrices(
+        plan.price,
+        plan.id,
+        plan.productId,
+        discounts,
+        preAppliedOriginal,
+        plan.landing_discount_name,
+        config,
+        now,
+      );
+      original = resolved.original;
+      sale = resolved.sale;
+      label = resolved.label;
+      promoActive = resolved.promoActive;
+      savingsRub = resolved.savingsRub;
+    } else {
+      original = plan.price;
+      sale = plan.price;
+      label = null;
+      promoActive = false;
+      savingsRub = 0;
+    }
+  }
 
   if (sale <= 0) return null;
   const hasDiscount = sale < original;
-  const displayOriginal = hasDiscount ? original : sale;
-  const displayLabel = hasDiscount ? label : null;
-
   const currency = plan.currency ?? "₽";
   const period = plan.period ?? "мес";
 
@@ -128,12 +209,15 @@ export function resolveGptHeroPromoOffer(
     planId: plan.id,
     planName: plan.name,
     periodLabel: period,
-    originalPrice: displayOriginal,
+    originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
-    discountLabel: displayLabel,
+    discountLabel: promoActive && hasDiscount ? label : null,
     discountPercent: config.fallbackDiscountPercent,
+    savingsRub: promoActive && hasDiscount ? savingsRub : 0,
     checkoutHref: `/checkout?plan=${encodeURIComponent(plan.id)}`,
     ctaLabel: `Подключить за ${sale.toLocaleString("ru")} ${currency}`,
+    promoActive: promoActive && hasDiscount,
+    ...buildOfferBase(config, promoActive && hasDiscount),
   };
 }
 
@@ -141,49 +225,82 @@ export function resolveSpotifyHeroPromoOffer(
   plans: SpotifyPlanLike[],
   discounts: LandingDiscount[],
   config: HeroPromoSiteConfig,
+  now = new Date(),
 ): HeroPromoOffer | null {
   const plan = plans.find((p) => p.id === config.featuredPlanId);
   if (!plan) return null;
 
-  const preAppliedOriginal = plan.originalPrice ?? plan.oldPrice;
-  const preAppliedSale = plan.price;
-  const hasPreApplied = preAppliedOriginal != null && preAppliedOriginal > preAppliedSale;
+  const fixed = activeFixedPromo(config, now);
+  let original: number;
+  let sale: number;
+  let label: string | null;
+  let promoActive: boolean;
+  let savingsRub: number;
 
-  const { original, sale, label } = hasPreApplied
-    ? {
-        original: preAppliedOriginal!,
-        sale: preAppliedSale,
-        label: plan.landingDiscountName ?? config.discountLabel,
-      }
-    : hasRealAdminLandingDiscount(plan.price, plan.id, undefined, discounts)
-      ? resolvePrices(
-          plan.price,
-          plan.id,
-          undefined,
-          discounts,
-          plan.oldPrice,
-          plan.landingDiscountName,
-          config,
-        )
-      : (activeFixedPromo(config) ?? { original: plan.price, sale: plan.price, label: null });
+  if (fixed) {
+    original = fixed.original;
+    sale = fixed.sale;
+    label = fixed.label;
+    promoActive = true;
+    savingsRub = fixed.savingsRub;
+  } else {
+    const preAppliedOriginal = plan.originalPrice ?? plan.oldPrice;
+    const preAppliedSale = plan.price;
+    const hasPreApplied = preAppliedOriginal != null && preAppliedOriginal > preAppliedSale;
+    if (hasPreApplied) {
+      original = preAppliedOriginal!;
+      sale = preAppliedSale;
+      label = plan.landingDiscountName ?? null;
+      promoActive = false;
+      savingsRub = original - sale;
+    } else if (hasRealAdminLandingDiscount(plan.price, plan.id, undefined, discounts)) {
+      const resolved = resolvePrices(
+        plan.price,
+        plan.id,
+        undefined,
+        discounts,
+        plan.oldPrice,
+        plan.landingDiscountName,
+        config,
+        now,
+      );
+      original = resolved.original;
+      sale = resolved.sale;
+      label = resolved.label;
+      promoActive = resolved.promoActive;
+      savingsRub = resolved.savingsRub;
+    } else {
+      original = plan.price;
+      sale = plan.price;
+      label = null;
+      promoActive = false;
+      savingsRub = 0;
+    }
+  }
 
   if (sale <= 0) return null;
   const hasDiscount = sale < original;
-  const displayOriginal = hasDiscount ? original : sale;
-  const displayLabel = hasDiscount ? label : null;
-
   const periodLabel =
-    plan.durationMonths && plan.durationMonths > 1 ? `${plan.durationMonths} мес` : "мес";
+    plan.durationMonths && plan.durationMonths > 1 ? `${plan.durationMonths} месяца` : "мес";
+
+  // Display name for duo hero: "Premium для двоих" not raw DB title
+  const planName =
+    plan.id === "spotify-duo-3m" || (plan.name.includes("двоих") && /3/.test(plan.name))
+      ? "Premium для двоих"
+      : plan.name;
 
   return {
     planId: plan.id,
-    planName: plan.name,
-    periodLabel,
-    originalPrice: displayOriginal,
+    planName,
+    periodLabel: plan.durationMonths === 3 ? "3 месяца" : periodLabel,
+    originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
-    discountLabel: displayLabel,
+    discountLabel: promoActive && hasDiscount ? label : null,
     discountPercent: config.fallbackDiscountPercent,
+    savingsRub: promoActive && hasDiscount ? savingsRub : 0,
     checkoutHref: `/checkout/spotify?plan=${encodeURIComponent(plan.id)}`,
     ctaLabel: plan.ctaText?.trim() || `Подключить за ${sale.toLocaleString("ru")} ₽`,
+    promoActive: promoActive && hasDiscount,
+    ...buildOfferBase(config, promoActive && hasDiscount),
   };
 }

@@ -13,6 +13,8 @@ import {
 import { scrollToSpotifyPricing } from "@/lib/spotify/scroll-to-pricing";
 import { resolveHeroCheckoutPlan } from "@/lib/spotify/resolve-hero-checkout-plan";
 import { buildSpotifyHeroPlayerPreview } from "@/lib/spotify/build-hero-player-preview";
+import { promoCountdownLabel } from "@/lib/landing/promo-deadline";
+import { useHeroPromoOffer } from "@/hooks/use-hero-promo-offer";
 import { reachLandingGoal } from "@/lib/analytics/reach-landing-goal";
 import { useLandingHeroAb } from "@/lib/analytics/landing-hero-ab";
 import { SpotifyPromoPlayerCard } from "@/components/spotify/SpotifyPromoPlayerCard";
@@ -27,6 +29,7 @@ function scrollToSpotifyPricingFromHero(source: string): void {
 export function SpotifyHero() {
   const { hero, heroPlayerPreview, plans } = useSpotifyLanding();
   const heroAb = useLandingHeroAb("subs-store");
+  const { offer: promoOffer, daysLeft } = useHeroPromoOffer("spotify");
   const badge = heroAb === "h1" ? SPOTIFY_HERO_BADGE_NO_TIMING : SPOTIFY_HERO_BADGE_WITH_TIMING;
   const accentTitle =
     heroAb === "h1" ? SPOTIFY_HERO_ACCENT_WITH_TIMING : SPOTIFY_HERO_ACCENT_BASE;
@@ -36,31 +39,48 @@ export function SpotifyHero() {
       const fromPlan = buildSpotifyHeroPlayerPreview(checkoutPlan);
       return {
         ...fromPlan,
-        // Keep CMS override for badge only if set; title/price always from featured tariff.
         cardBadge: heroPlayerPreview.cardBadge || fromPlan.cardBadge,
       };
     }
     return heroPlayerPreview;
   }, [checkoutPlan, heroPlayerPreview]);
 
+  const salePrice = promoOffer?.salePrice ?? checkoutPlan?.price ?? player.priceRub;
   const ctaLabel =
+    promoOffer?.ctaLabel ||
     checkoutPlan?.ctaText?.trim() ||
     (checkoutPlan
       ? `Подключить за ${checkoutPlan.price.toLocaleString("ru")} ₽`
       : hero.primaryCta);
 
+  const promoUi =
+    promoOffer?.promoActive && promoOffer.originalPrice > promoOffer.salePrice
+      ? {
+          originalPrice: promoOffer.originalPrice,
+          discountLabel: promoOffer.discountLabel || "Скидка 10%",
+          savingsRub: promoOffer.savingsRub,
+          periodBadge: promoOffer.periodBadge || "1–31 августа",
+          offerHeadline: promoOffer.offerHeadline || "Spotify Premium выгоднее для двоих",
+          monthlyHint: promoOffer.monthlyHint,
+          promoBanner: promoOffer.promoBanner || "Скидка 10% · до 31 августа",
+          countdown: promoCountdownLabel(Math.max(0, daysLeft)),
+          terms: promoOffer.terms,
+        }
+      : null;
+
   const cardProps = {
     badge: player.cardBadge,
-    title: player.cardTitle,
-    subtitle: player.cardSubtitle,
-    fromLabel: player.fromLabel,
-    priceRub: player.priceRub,
+    title: promoOffer?.planName || player.cardTitle,
+    subtitle: promoOffer?.periodLabel || player.cardSubtitle,
+    fromLabel: promoUi ? "" : player.fromLabel,
+    priceRub: salePrice,
     featureChips: player.featureChips,
     ctaLabel,
-    planId: checkoutPlan?.id ?? null,
-    planName: checkoutPlan?.name ?? null,
+    planId: promoOffer?.planId ?? checkoutPlan?.id ?? null,
+    planName: promoOffer?.planName ?? checkoutPlan?.name ?? null,
     tierLabel: checkoutPlan?.tab === "duo" ? "Duo" : checkoutPlan?.tab === "family" ? "Family" : "Premium",
     variant: "glass" as const,
+    promo: promoUi,
   };
 
   return (

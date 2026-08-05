@@ -1,45 +1,92 @@
-import type { PromoDeadline } from "@/lib/landing/promo-deadline";
+import type { PromoDeadline, PromoWindow } from "@/lib/landing/promo-deadline";
+import { formatPromoPeriodRange } from "@/lib/landing/promo-deadline";
 
 export type HeroPromoSiteKey = "gpt" | "spotify";
 
 export type HeroPromoSiteConfig = {
   enabled: boolean;
-  /** ID тарифа на витрине (plus-std, spotify-ind-3m, …) */
+  /** ID тарифа на витрине (plus-ready, spotify-duo-3m, …) */
   featuredPlanId: string;
-  /** Цена по акции — оплата и checkout */
+  /** Цена по акции — оплата и checkout (итоговая) */
   promoSalePrice: number;
-  /** Зачёркнутая цена «без скидки» */
+  /** Зачёркнутая цена «без скидки» (только визуал) */
   promoOriginalPrice: number;
-  /** Бейдж на карточке */
+  /** Бейдж скидки, напр. «Скидка 10%» */
   discountLabel: string;
   fallbackDiscountPercent: number;
+  /** Экономия в ₽ (promoOriginal − promoSale) */
+  savingsRub: number;
+  /** Календарное окно акции (Europe/Moscow) */
+  window: PromoWindow;
+  /** Alias end date — совместимость со старыми хелперами */
   deadline: PromoDeadline;
+  /** Текст на акционной плашке */
   promoTitle: string;
+  /** Короткий период, напр. «1–31 августа» */
+  periodBadge: string;
+  /** Продуктовый оффер под названием */
+  offerHeadline: string;
+  /** Вторая строка оффера (опционально) */
+  offerSubline: string | null;
+  /** Подсказка выгоды (Spotify ≈₽/мес) */
+  monthlyHint: string | null;
+  /** Пункты popover с условиями */
+  terms: string[];
 };
 
-/** Летняя акция до 30 июня — фиксированные цены на featured-тариф. */
+const AUGUST_2026: PromoWindow = {
+  start: { year: 2026, month: 8, day: 1 },
+  end: { year: 2026, month: 8, day: 31 },
+};
+
+/**
+ * Августовская акция 1–31.08.2026 (МСК).
+ * Итоговые цены = promoSalePrice (без повторного −10% в checkout).
+ */
 export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = {
   gpt: {
     enabled: true,
     featuredPlanId: "plus-ready",
     promoSalePrice: 1590,
-    promoOriginalPrice: 1990,
-    discountLabel: "−20%",
+    promoOriginalPrice: 1790,
+    discountLabel: "Скидка 10%",
     fallbackDiscountPercent: 10,
-    deadline: { year: 2026, month: 6, day: 30 },
-    promoTitle: "Летняя акция",
+    savingsRub: 200,
+    window: AUGUST_2026,
+    deadline: AUGUST_2026.end,
+    promoTitle: "Скидка 10% · до 31 августа",
+    periodBadge: "1–31 августа",
+    offerHeadline: "Готовый аккаунт уже с активным ChatGPT Plus",
+    offerSubline: "Получите данные для входа после оформления",
+    monthlyHint: null,
+    terms: [
+      "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
+      "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
+      "Акция относится только к тарифу «Готовый аккаунт ChatGPT Plus».",
+      "Совместимость с промокодами определяется правилами сайта на момент оформления.",
+    ],
   },
   spotify: {
     enabled: true,
-    /** Главный Hero Offer на лендинге Spotify Store */
     featuredPlanId: "spotify-duo-3m",
     promoSalePrice: 1690,
-    promoOriginalPrice: 1990,
-    discountLabel: "−15%",
-    fallbackDiscountPercent: 15,
-    /** Сезонная фикс-цена; после deadline карточка берёт актуальную цену тарифа из БД/конфига */
-    deadline: { year: 2026, month: 6, day: 30 },
-    promoTitle: "Летняя акция",
+    promoOriginalPrice: 1890,
+    discountLabel: "Скидка 10%",
+    fallbackDiscountPercent: 10,
+    savingsRub: 200,
+    window: AUGUST_2026,
+    deadline: AUGUST_2026.end,
+    promoTitle: "Скидка 10% · до 31 августа",
+    periodBadge: "1–31 августа",
+    offerHeadline: "Spotify Premium выгоднее для двоих",
+    offerSubline: null,
+    monthlyHint: "≈563 ₽ в месяц за двоих",
+    terms: [
+      "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
+      "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
+      "Акция относится только к тарифу «Premium для двоих · 3 месяца».",
+      "Совместимость с промокодами определяется правилами сайта на момент оформления.",
+    ],
   },
 };
 
@@ -47,13 +94,27 @@ export function heroPromoFixedDisplay(config: HeroPromoSiteConfig): {
   original: number;
   sale: number;
   label: string;
+  savingsRub: number;
+  percent: number;
 } | null {
-  const { promoOriginalPrice: original, promoSalePrice: sale, discountLabel, fallbackDiscountPercent } =
-    config;
+  const {
+    promoOriginalPrice: original,
+    promoSalePrice: sale,
+    discountLabel,
+    fallbackDiscountPercent,
+    savingsRub,
+  } = config;
   if (original <= sale || sale <= 0) return null;
+  const computedSavings = original - sale;
   return {
     original,
     sale,
-    label: discountLabel || `−${fallbackDiscountPercent}%`,
+    label: discountLabel || `Скидка ${fallbackDiscountPercent}%`,
+    savingsRub: savingsRub > 0 ? savingsRub : computedSavings,
+    percent: fallbackDiscountPercent,
   };
+}
+
+export function heroPromoPeriodLabel(config: HeroPromoSiteConfig): string {
+  return config.periodBadge || formatPromoPeriodRange(config.window);
 }

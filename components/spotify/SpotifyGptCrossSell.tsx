@@ -4,12 +4,15 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ChatGptMarkIcon } from "@/components/icons/ChatGptMarkIcon";
 import { useSpotifyLanding } from "@/components/spotify/SpotifyLandingProvider";
+import { resolveCrossStoreHref } from "@/lib/store-urls";
 
 export function SpotifyGptCrossSell() {
   const { projectsSection: s } = useSpotifyLanding();
   if (s.showOnLanding === false || !s.ctaHref?.trim()) {
     return null;
   }
+
+  const href = resolveCrossStoreHref(s.ctaHref, "gpt-store");
 
   return (
     <section
@@ -46,7 +49,7 @@ export function SpotifyGptCrossSell() {
         </div>
       </div>
       <Link
-        href={s.ctaHref}
+        href={href}
         className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:w-auto"
         style={{ background: "#10a37f" }}
       >
