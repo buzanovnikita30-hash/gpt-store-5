@@ -46,11 +46,13 @@ const AUGUST_2026: PromoWindow = {
 export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = {
   gpt: {
     /**
-     * Temporary: plus-ready hidden — hero features «Быстрая активация».
-     * August ready-account promo stays off until plus-ready returns.
+     * TEMP: «Готовый аккаунт» (plus-ready) снят с витрины.
+     * Hero показывает «Быстрая активация» (plus-fast) без августовского chrome.
+     * Вернуть ready: featuredPlanId=plus-ready, sale/original 1590/1790, enabled campaign.
      */
-    enabled: false,
+    enabled: true,
     featuredPlanId: "plus-fast",
+    /** Equal prices → no strikethrough / campaign badges (heroPromoFixedDisplay → null) */
     promoSalePrice: 2690,
     promoOriginalPrice: 2690,
     discountLabel: "Скидка 10%",
@@ -60,13 +62,13 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     deadline: AUGUST_2026.end,
     promoTitle: "Скидка 10% · до 31 августа",
     periodBadge: "1–31 августа",
-    offerHeadline: "Подключение вне очереди — обычно 5–15 минут",
+    offerHeadline: "Приоритетное подключение вне очереди",
     offerSubline: null,
     monthlyHint: null,
     terms: [
       "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
       "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
-      "Акция относится только к тарифу «Быстрая активация».",
+      "Акция относится только к тарифу «Готовый аккаунт ChatGPT Plus».",
       "Совместимость с промокодами определяется правилами сайта на момент оформления.",
     ],
   },
