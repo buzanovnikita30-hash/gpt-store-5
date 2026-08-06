@@ -59,8 +59,10 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
   // Предвыбор тарифа из URL (?plan=…) или checkout intent — цель один раз
   useEffect(() => {
     if (!authGate.ready || urlPlanInitDoneRef.current) return;
-    const planId = searchParams.get("plan") ?? authGate.intent?.planId ?? null;
-    if (!planId) return;
+    const rawPlanId = searchParams.get("plan") ?? authGate.intent?.planId ?? null;
+    if (!rawPlanId) return;
+    // Temporary: plus-ready off storefront → map deep-links to Быстрая активация
+    const planId = rawPlanId === "plus-ready" ? "plus-fast" : rawPlanId;
     const found = runtimePlans.find((p) => p.id === planId && p.inStock !== false);
     if (!found) return;
     urlPlanInitDoneRef.current = true;

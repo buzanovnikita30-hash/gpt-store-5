@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { ExtendedPlan } from "@/lib/chatgpt-data";
 import { createClient } from "@/lib/supabase/client";
+import { trackGPTPayClick } from "@/lib/metrics";
 
 type Props = {
   plans: ExtendedPlan[];
@@ -14,7 +15,9 @@ type Props = {
 export function GptCheckoutClient({ plans }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const planIdFromUrl = searchParams.get("plan");
+  const planIdFromUrlRaw = searchParams.get("plan");
+  const planIdFromUrl =
+    planIdFromUrlRaw === "plus-ready" ? "plus-fast" : planIdFromUrlRaw;
 
   const [selectedPlanId, setSelectedPlanId] = useState(planIdFromUrl ?? plans[0]?.id ?? "");
   const [accountEmail, setAccountEmail] = useState("");
@@ -55,7 +58,9 @@ export function GptCheckoutClient({ plans }: Props) {
       setError("Укажите email аккаунта ChatGPT");
       return;
     }
+    if (loading) return;
 
+    trackGPTPayClick(selectedPlan.id, "gpt_checkout_client");
     setLoading(true);
     setError(null);
 

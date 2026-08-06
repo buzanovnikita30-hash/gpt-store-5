@@ -163,9 +163,17 @@ export function PricingSection({
   const product = PRODUCTS.find((p) => p.id === activeProduct)!;
   const isProDualCompare =
     activeProduct === "chatgpt-pro" && plans.length >= 2 && plans.every((p) => p.productId === "chatgpt-pro");
+  const hasPlusReady = plans.some((p) => p.id === "plus-ready");
   const isPlusTripleCompare =
     activeProduct === "chatgpt-plus" &&
+    hasPlusReady &&
     plans.length >= 3 &&
+    plans.every((p) => p.productId === "chatgpt-plus");
+  const isPlusDualCompare =
+    activeProduct === "chatgpt-plus" &&
+    !hasPlusReady &&
+    plans.some((p) => p.id === "plus-std") &&
+    plans.some((p) => p.id === "plus-fast") &&
     plans.every((p) => p.productId === "chatgpt-plus");
 
   return (
@@ -266,7 +274,7 @@ export function PricingSection({
           </motion.div>
         </AnimatePresence>
 
-        {/* Plus: три варианта — наглядно чем отличаются */}
+        {/* Plus: сравнение тарифов */}
         {isPlusTripleCompare && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -311,6 +319,54 @@ export function PricingSection({
               <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/75 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/35 p-4 shadow-md shadow-amber-500/12 ring-1 ring-amber-300/40 md:p-5">
                 <span className="relative inline-flex rounded-full border border-amber-400/90 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-950">
                   Приоритет скорости
+                </span>
+                <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-orange-900">Быстрая активация</p>
+                <p className="relative mt-1 font-heading text-base font-bold text-orange-950 md:text-lg">
+                  Вне очереди — быстрее
+                </p>
+                <p className="relative mt-2 text-xs leading-relaxed text-orange-950/90 md:text-sm">
+                  Приоритетное подключение: обычно 5–15 минут после передачи данных, без ожидания общей очереди.
+                </p>
+                <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-amber-200/80">
+                  <div className="h-full w-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />
+                </div>
+                <p className="relative mt-1.5 text-[10px] font-medium text-orange-900 md:text-[11px]">Очередь: приоритет</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {isPlusDualCompare && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.35 }}
+            className="mb-10"
+          >
+            <p className="mb-4 hidden text-center text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 md:block">
+              Два тарифа — обычная очередь или ускорение
+            </p>
+            <div className="mx-auto hidden max-w-5xl gap-4 md:grid md:grid-cols-2 md:gap-4">
+              <div className="relative overflow-hidden rounded-2xl border-2 border-[#10a37f]/85 bg-gradient-to-br from-emerald-50/95 via-white to-white p-4 shadow-lg shadow-emerald-600/15 ring-2 ring-[#10a37f]/20 md:p-5">
+                <span className="relative inline-flex rounded-full bg-[#10a37f] px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
+                  Универсально
+                </span>
+                <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-emerald-800">Популярный</p>
+                <p className="relative mt-1 font-heading text-base font-bold text-gray-900 md:text-lg">
+                  На ваш аккаунт
+                </p>
+                <p className="relative mt-2 text-xs leading-relaxed text-gray-700 md:text-sm">
+                  Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT.
+                </p>
+                <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-emerald-100">
+                  <div className="h-full w-[72%] rounded-full bg-[#10a37f]" />
+                </div>
+                <p className="relative mt-1.5 text-[10px] font-medium text-emerald-800 md:text-[11px]">Очередь: общая</p>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/75 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/35 p-4 shadow-md shadow-amber-500/12 ring-1 ring-amber-300/40 md:p-5">
+                <span className="relative inline-flex rounded-full border border-amber-400/90 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-950">
+                  Выбор героя
                 </span>
                 <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-orange-900">Быстрая активация</p>
                 <p className="relative mt-1 font-heading text-base font-bold text-orange-950 md:text-lg">
@@ -396,7 +452,7 @@ export function PricingSection({
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.35 }}
             className={
-              isProDualCompare
+              isProDualCompare || isPlusDualCompare
                 ? "mx-auto grid w-full max-w-5xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 md:items-stretch"
                 : "grid grid-cols-1 gap-6 md:grid-cols-3"
             }
