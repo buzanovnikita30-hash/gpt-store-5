@@ -360,7 +360,6 @@ export function PricingSection({
                 </p>
                 <p className="relative mt-2 flex-1 text-xs leading-relaxed text-gray-700 md:text-sm">
                   Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT.
-                  Потребуется вход в аккаунт (email, пароль или Google / Apple / Microsoft).
                 </p>
                 <div className="relative mt-3 flex h-2 shrink-0 overflow-hidden rounded-full bg-emerald-100">
                   <div className="h-full w-[72%] rounded-full bg-[#10a37f]" />
@@ -627,7 +626,7 @@ export function PricingSection({
                   </div>
                 )}
 
-                <div className={`mb-6 shrink-0 ${isProDualCompare || isPlusDualCompare ? "min-h-[4.25rem]" : ""}`}>
+                <div className="mb-4 shrink-0">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-gray-700">{plan.name}</p>
                     {proTier === "5x" && (
@@ -693,22 +692,22 @@ export function PricingSection({
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
+                  <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm text-gray-500">{plan.description}</p>
                   {plan.id === "plus-ready" ? (
                     <p className="mt-3 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
                       {PLUS_READY_CHECKOUT_WARNING}
                     </p>
                   ) : null}
                   {isPlusDualCompare ? (
-                    <div className="mt-3 min-h-[9.5rem]">
+                    <div className="mt-2 min-h-[2.25rem]">
                       {plan.id === "plus-std" ? <PlusStdAccessNotice compact /> : null}
                     </div>
                   ) : plan.id === "plus-std" ? (
-                    <PlusStdAccessNotice className="mt-3" compact />
+                    <PlusStdAccessNotice className="mt-2" compact />
                   ) : null}
                 </div>
 
-                <ul className={`flex-1 space-y-2.5 ${isProDualCompare ? "mb-0" : "mb-8"}`}>
+                <ul className={`flex-1 space-y-2 ${isProDualCompare || isPlusDualCompare ? "mb-0" : "mb-8"}`}>
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <span

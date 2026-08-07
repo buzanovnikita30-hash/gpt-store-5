@@ -277,9 +277,8 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
     period: "мес",
     badge: "Популярный",
     description:
-      "Тариф, который чаще всего выбирают. Подключение ChatGPT Plus на ваш аккаунт — потребуется вход в аккаунт (email, пароль или Google / Apple / Microsoft).",
+      "Тариф, который чаще всего выбирают. Подключение на ваш аккаунт или готовый персональный аккаунт.",
     features: [
-      "Подключение на ваш аккаунт ChatGPT",
       "ChatGPT 5.5 и актуальные модели ChatGPT Plus",
       "Генерация изображений DALL·E 3",
       "Анализ файлов и данных",
@@ -308,7 +307,6 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
       "Поддержка 24/7",
       "Гарантия на весь срок",
       "Приоритет вне очереди",
-      "Обычно до 5–15 минут после передачи данных",
     ],
     /** TEMP: featured while plus-ready is hidden from storefront */
     isPopular: true,
