@@ -8,6 +8,7 @@ import {
   GPT_TARIFF_GUIDE_ITEMS,
   TariffChooseGuide,
 } from "@/components/landing/TariffChooseGuide";
+import { PlusStdAccessNotice } from "@/components/landing/PlusStdAccessNotice";
 import { ConnectCheckoutButton } from "@/components/checkout/ConnectCheckoutButton";
 
 type RuntimePlan = (typeof PLUS_PLANS)[number] & {
@@ -22,7 +23,7 @@ const PLUS_MOBILE_COMPARE: Record<string, { text: string; shell: string }> = {
       "border-sky-400/75 bg-gradient-to-br from-sky-50 via-white to-white text-sky-950 shadow-sky-500/12 ring-sky-200/50",
   },
   "plus-std": {
-    text: "Популярный: лучший баланс цены и скорости.",
+    text: "Популярный: подключение на ваш аккаунт — потребуется вход (email, пароль или Google / Apple / Microsoft).",
     shell:
       "border-[#10a37f]/50 bg-gradient-to-br from-emerald-50/95 via-white to-white text-gray-800 shadow-emerald-600/15 ring-emerald-200/60",
   },
@@ -309,6 +310,7 @@ export function PricingSection({
                 </p>
                 <p className="relative mt-2 text-xs leading-relaxed text-gray-700 md:text-sm">
                   Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT.
+                  Потребуется вход в аккаунт (email, пароль или Google / Apple / Microsoft).
                 </p>
                 <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-emerald-100">
                   <div className="h-full w-[72%] rounded-full bg-[#10a37f]" />
@@ -354,7 +356,8 @@ export function PricingSection({
                   На ваш аккаунт
                 </p>
                 <p className="relative mt-2 text-xs leading-relaxed text-gray-700 md:text-sm">
-                  Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT в общей очереди.
+                  Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT.
+                  Потребуется вход в аккаунт (email, пароль или Google / Apple / Microsoft).
                 </p>
                 <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-emerald-100">
                   <div className="h-full w-[72%] rounded-full bg-[#10a37f]" />
@@ -691,6 +694,7 @@ export function PricingSection({
                       {PLUS_READY_CHECKOUT_WARNING}
                     </p>
                   ) : null}
+                  {plan.id === "plus-std" ? <PlusStdAccessNotice className="mt-3" compact /> : null}
                 </div>
 
                 <ul className={`flex-1 space-y-2.5 ${isProDualCompare ? "mb-0" : "mb-8"}`}>

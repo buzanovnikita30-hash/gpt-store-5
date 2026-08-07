@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
 import { PLUS_PLANS, PRO_PLANS, PLUS_READY_CHECKOUT_WARNING, type ExtendedPlan } from "@/lib/chatgpt-data";
 import { TokenSafetyBlock } from "@/components/ui/TokenSafetyBlock";
+import { PlusStdAccessNotice } from "@/components/landing/PlusStdAccessNotice";
 import { cn } from "@/lib/utils";
 import { formatPallyCheckoutError } from "@/lib/payments/pally-env-hint";
 import { startCheckoutPaymentWait } from "@/lib/checkout/start-payment-wait";
@@ -302,6 +303,7 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
                 {PLUS_READY_CHECKOUT_WARNING}
               </p>
             ) : null}
+            {selectedPlan?.id === "plus-std" ? <PlusStdAccessNotice className="mt-4" /> : null}
             <button
               type="button"
               disabled={!selectedPlan || selectedPlan.inStock === false}
@@ -346,6 +348,7 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
                     {PLUS_READY_CHECKOUT_WARNING}
                   </p>
                 ) : null}
+                {selectedPlan.id === "plus-std" ? <PlusStdAccessNotice /> : null}
               </div>
             )}
 
