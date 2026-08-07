@@ -349,36 +349,41 @@ export function PricingSection({
             <p className="mb-4 hidden text-center text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 md:block">
               Два тарифа — стандартное подключение или ускорение
             </p>
-            <div className="mx-auto hidden max-w-5xl gap-4 md:grid md:grid-cols-2 md:gap-5">
-              <div className="relative overflow-hidden rounded-2xl border-2 border-[#10a37f]/70 bg-gradient-to-br from-emerald-50/95 via-white to-white p-4 shadow-md shadow-emerald-600/10 md:p-5">
-                <p className="relative text-xs font-bold uppercase tracking-wider text-emerald-800">Популярный</p>
+            <div className="mx-auto hidden max-w-5xl items-stretch gap-4 md:grid md:grid-cols-2 md:gap-5">
+              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-[#10a37f]/70 bg-gradient-to-br from-emerald-50/95 via-white to-white p-4 shadow-md shadow-emerald-600/10 md:p-5">
+                <div className="relative flex min-h-[1.375rem] items-center">
+                  <span className="invisible rounded-full px-2 py-0.5 text-[10px] font-bold uppercase">Главный выбор</span>
+                </div>
+                <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-emerald-800">Популярный</p>
                 <p className="relative mt-1 font-heading text-base font-bold text-gray-900 md:text-lg">
                   На ваш аккаунт
                 </p>
-                <p className="relative mt-2 text-xs leading-relaxed text-gray-700 md:text-sm">
+                <p className="relative mt-2 flex-1 text-xs leading-relaxed text-gray-700 md:text-sm">
                   Универсальный вариант для ежедневного использования — подключение Plus на ваш ChatGPT.
                   Потребуется вход в аккаунт (email, пароль или Google / Apple / Microsoft).
                 </p>
-                <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-emerald-100">
+                <div className="relative mt-3 flex h-2 shrink-0 overflow-hidden rounded-full bg-emerald-100">
                   <div className="h-full w-[72%] rounded-full bg-[#10a37f]" />
                 </div>
-                <p className="relative mt-1.5 text-[10px] font-medium text-emerald-800 md:text-[11px]">Очередь: общая</p>
+                <p className="relative mt-1.5 shrink-0 text-[10px] font-medium text-emerald-800 md:text-[11px]">Очередь: общая</p>
               </div>
-              <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/80 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/40 p-4 shadow-lg shadow-amber-500/15 ring-2 ring-amber-300/40 md:p-5">
-                <span className="relative inline-flex rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
-                  Главный выбор
-                </span>
+              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-amber-500/80 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/40 p-4 shadow-lg shadow-amber-500/15 ring-2 ring-amber-300/40 md:p-5">
+                <div className="relative flex min-h-[1.375rem] items-center">
+                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
+                    Главный выбор
+                  </span>
+                </div>
                 <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-orange-900">Быстрая активация</p>
                 <p className="relative mt-1 font-heading text-base font-bold text-orange-950 md:text-lg">
                   Вне очереди — быстрее
                 </p>
-                <p className="relative mt-2 text-xs leading-relaxed text-orange-950/90 md:text-sm">
+                <p className="relative mt-2 flex-1 text-xs leading-relaxed text-orange-950/90 md:text-sm">
                   Приоритетное подключение на ваш аккаунт: обычно 5–15 минут после передачи данных.
                 </p>
-                <div className="relative mt-3 flex h-2 overflow-hidden rounded-full bg-amber-200/80">
+                <div className="relative mt-3 flex h-2 shrink-0 overflow-hidden rounded-full bg-amber-200/80">
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500" />
                 </div>
-                <p className="relative mt-1.5 text-[10px] font-medium text-orange-900 md:text-[11px]">Очередь: приоритет</p>
+                <p className="relative mt-1.5 shrink-0 text-[10px] font-medium text-orange-900 md:text-[11px]">Очередь: приоритет</p>
               </div>
             </div>
           </motion.div>
@@ -453,8 +458,8 @@ export function PricingSection({
             transition={{ duration: 0.35 }}
             className={
               isProDualCompare || isPlusDualCompare
-                ? "mx-auto grid w-full max-w-5xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 md:items-stretch"
-                : "grid grid-cols-1 gap-6 md:grid-cols-3"
+                ? "mx-auto grid w-full max-w-5xl auto-rows-fr grid-cols-1 items-stretch gap-6 md:grid-cols-2"
+                : "grid auto-rows-fr grid-cols-1 items-stretch gap-6 md:grid-cols-3"
             }
           >
             {plans.map((plan, index) => {
@@ -588,7 +593,7 @@ export function PricingSection({
                     : null;
 
               return (
-              <div key={plan.id} className="flex flex-col">
+              <div key={plan.id} className="flex h-full flex-col">
               {mobileHint ? (
                 <MobileTariffCompareHint text={mobileHint.text} shell={mobileHint.shell} />
               ) : null}
@@ -601,7 +606,7 @@ export function PricingSection({
                 onHoverEnd={() => setHoveredPlanId((prev) => (prev === plan.id ? null : prev))}
                 onFocusCapture={() => setHoveredPlanId(plan.id)}
                 onBlurCapture={() => setHoveredPlanId((prev) => (prev === plan.id ? null : prev))}
-                className={`relative flex flex-col rounded-2xl bg-white p-7 shadow-sm ${tierShell} ${isProDualCompare ? "h-full min-h-0" : ""}`}
+                className={`relative flex h-full min-h-0 flex-col rounded-2xl bg-white p-7 shadow-sm ${tierShell}`}
                 style={articleShadow}
               >
                 {(plan.badge || !isInStock) && (
@@ -622,7 +627,7 @@ export function PricingSection({
                   </div>
                 )}
 
-                <div className={`mb-6 shrink-0 ${isProDualCompare ? "min-h-[4.25rem]" : ""}`}>
+                <div className={`mb-6 shrink-0 ${isProDualCompare || isPlusDualCompare ? "min-h-[4.25rem]" : ""}`}>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-gray-700">{plan.name}</p>
                     {proTier === "5x" && (
@@ -694,7 +699,13 @@ export function PricingSection({
                       {PLUS_READY_CHECKOUT_WARNING}
                     </p>
                   ) : null}
-                  {plan.id === "plus-std" ? <PlusStdAccessNotice className="mt-3" compact /> : null}
+                  {isPlusDualCompare ? (
+                    <div className="mt-3 min-h-[9.5rem]">
+                      {plan.id === "plus-std" ? <PlusStdAccessNotice compact /> : null}
+                    </div>
+                  ) : plan.id === "plus-std" ? (
+                    <PlusStdAccessNotice className="mt-3" compact />
+                  ) : null}
                 </div>
 
                 <ul className={`flex-1 space-y-2.5 ${isProDualCompare ? "mb-0" : "mb-8"}`}>
