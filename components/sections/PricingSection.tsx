@@ -350,9 +350,11 @@ export function PricingSection({
               Два тарифа — стандартное подключение или ускорение
             </p>
             <div className="mx-auto hidden max-w-5xl items-stretch gap-4 md:grid md:grid-cols-2 md:gap-5">
-              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-[#10a37f]/70 bg-gradient-to-br from-emerald-50/95 via-white to-white p-4 shadow-md shadow-emerald-600/10 md:p-5">
+              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-[#10a37f]/85 bg-gradient-to-br from-emerald-50/95 via-white to-white p-4 shadow-lg shadow-emerald-600/15 ring-2 ring-[#10a37f]/20 md:p-5">
                 <div className="relative flex min-h-[1.375rem] items-center">
-                  <span className="invisible rounded-full px-2 py-0.5 text-[10px] font-bold uppercase">Главный выбор</span>
+                  <span className="rounded-full bg-[#10a37f] px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
+                    Главный выбор
+                  </span>
                 </div>
                 <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-emerald-800">Популярный</p>
                 <p className="relative mt-1 font-heading text-base font-bold text-gray-900 md:text-lg">
@@ -366,10 +368,10 @@ export function PricingSection({
                 </div>
                 <p className="relative mt-1.5 shrink-0 text-[10px] font-medium text-emerald-800 md:text-[11px]">Очередь: общая</p>
               </div>
-              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-amber-500/80 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/40 p-4 shadow-lg shadow-amber-500/15 ring-2 ring-amber-300/40 md:p-5">
+              <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-amber-500/75 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/35 p-4 shadow-md shadow-amber-500/12 ring-1 ring-amber-300/40 md:p-5">
                 <div className="relative flex min-h-[1.375rem] items-center">
-                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
-                    Главный выбор
+                  <span className="rounded-full border border-amber-400/90 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-950">
+                    Приоритет скорости
                   </span>
                 </div>
                 <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-orange-900">Быстрая активация</p>
@@ -496,9 +498,9 @@ export function PricingSection({
                 plusTier === "ready"
                   ? "border-2 border-sky-400/75 shadow-md shadow-sky-500/10"
                   : plusTier === "fast"
-                    ? "border-2 border-amber-500/80 ring-2 ring-amber-300/50 shadow-lg shadow-amber-500/12"
+                    ? "border-2 border-amber-500/75 ring-1 ring-amber-300/45 shadow-md shadow-amber-500/10"
                     : plusTier === "std"
-                      ? "border-2 border-[#10a37f]/75 shadow-md shadow-emerald-600/10"
+                      ? "border-2 border-[#10a37f]/85 ring-2 ring-emerald-200/50 shadow-lg shadow-emerald-600/12"
                       : plusTier === "new"
                         ? "border border-slate-200/95 bg-slate-50/30 ring-1 ring-slate-100/90"
                         : "";

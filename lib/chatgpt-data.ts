@@ -205,9 +205,8 @@ export const PLANS: Plan[] = [];
 /**
  * Скрыты из публичной витрины (plan_availability / inStock).
  * Не удалять записи — нужны для админки и старых заказов.
- * plus-ready: временно снят с продажи (вернуть — убрать из Set и inStock:false).
  */
-export const GPT_PUBLIC_HIDDEN_PLAN_IDS = new Set<string>(["plus-new", "plus-ready"]);
+export const GPT_PUBLIC_HIDDEN_PLAN_IDS = new Set<string>(["plus-new"]);
 
 export const PLUS_READY_CHECKOUT_WARNING =
   "Этот вариант не подходит для подключения или продления подписки на вашем текущем аккаунте ChatGPT. Если подписка нужна именно на ваш аккаунт, выберите другой вариант активации.";
@@ -243,8 +242,6 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
     ],
     isPopular: false,
     cta: "Подключить за 1 590 ₽",
-    /** Временно скрыт с публичной витрины — см. GPT_PUBLIC_HIDDEN_PLAN_IDS */
-    inStock: false,
   },
   {
     id: "plus-new",
@@ -287,7 +284,7 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
       "Гарантия на весь срок",
       "Активация в общей очереди",
     ],
-    isPopular: false,
+    isPopular: true,
     cta: "Подключить за 2 190 ₽",
   },
   {
@@ -307,9 +304,9 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
       "Поддержка 24/7",
       "Гарантия на весь срок",
       "Приоритет вне очереди",
+      "Обычно до 5–15 минут после передачи данных",
     ],
-    /** TEMP: featured while plus-ready is hidden from storefront */
-    isPopular: true,
+    isPopular: false,
     cta: "Подключить за 2 690 ₽",
   },
 ];
@@ -368,7 +365,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Чем отличаются тарифы Plus?",
     answer:
-      "«Популярный» — подключение ChatGPT Plus на ваш аккаунт в общей очереди. «Быстрая активация» — то же подключение, но вне очереди, обычно 5–15 минут после передачи данных.",
+      "«Готовый аккаунт ChatGPT Plus» — готовый аккаунт с уже активированной подпиской и данными для входа. «Популярный» — подключение на ваш аккаунт. «Быстрая активация» — приоритет вне очереди.",
   },
   {
     question: "Чем отличаются Pro 5x и Pro 20x?",
