@@ -102,6 +102,7 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
           // Featured plan must stay available even if admin hide/filter drops it from store-config.
           const byId = new Map<string, GptPlanRow>();
           for (const p of PLUS_PLANS_NEW) {
+            if (p.inStock === false) continue;
             byId.set(p.id, {
               id: p.id,
               name: p.name,

@@ -168,11 +168,6 @@ export function TariffChooseGuide({
 
 export const GPT_TARIFF_GUIDE_ITEMS: TariffGuideItem[] = [
   {
-    label: "Нужен готовый аккаунт",
-    hint: "«Готовый аккаунт ChatGPT Plus» — аккаунт с уже активированной подпиской и данными для входа.",
-    href: "#pricing",
-  },
-  {
     label: "Нужен обычный ChatGPT Plus на ваш аккаунт",
     hint: "Выбирайте «Популярный» — лучший баланс цены и скорости подключения.",
     href: "#pricing",
