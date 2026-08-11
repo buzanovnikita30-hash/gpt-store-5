@@ -183,7 +183,9 @@ export function HeroPromoOfferCard({ site, className, layout = "compact" }: Hero
                 )}
               >
                 <PiggyBank className="h-3 w-3" aria-hidden />
-                Экономия {offer.savingsRub.toLocaleString("ru")} ₽
+                {isGpt
+                  ? `минус ${offer.savingsRub.toLocaleString("ru")} ₽`
+                  : `Экономия ${offer.savingsRub.toLocaleString("ru")} ₽`}
               </span>
             ) : null}
             {offer.periodBadge ? (

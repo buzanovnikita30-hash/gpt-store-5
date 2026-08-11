@@ -55,10 +55,10 @@ assert.equal(countdown(1), "Остался 1 день");
 assert.ok(daysLeft(window.end, "2026-08-05T12:00:00+03:00") > 0);
 assert.ok(daysLeft(window.end, "2026-09-01T00:00:00+03:00") < 0);
 
-// Price math: no double 10%
-const gptSale = 1590;
-const gptOrig = 1790;
-assert.equal(gptOrig - gptSale, 200);
+// Price math: Popular 2490 → 2190 (−300), no double 10%
+const gptSale = 2190;
+const gptOrig = 2490;
+assert.equal(gptOrig - gptSale, 300);
 assert.notEqual(Math.round(gptSale * 0.9), gptSale);
 
 const spSale = 1690;

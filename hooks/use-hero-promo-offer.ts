@@ -98,7 +98,23 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
         };
         if (cancelled) return;
         if (site === "gpt") {
-          setGptPlans((json.plans as GptPlanRow[]) ?? []);
+          const fromApi = (json.plans as GptPlanRow[]) ?? [];
+          // Featured plan must stay available even if admin hide/filter drops it from store-config.
+          const byId = new Map<string, GptPlanRow>();
+          for (const p of PLUS_PLANS_NEW) {
+            byId.set(p.id, {
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              currency: p.currency,
+              period: p.period,
+              productId: p.productId,
+            });
+          }
+          for (const p of fromApi) {
+            if (p.id) byId.set(p.id, { ...byId.get(p.id), ...p });
+          }
+          setGptPlans([...byId.values()]);
         } else {
           setSpotifyPlans((json.plans as SpotifyPlanRow[]) ?? []);
         }
