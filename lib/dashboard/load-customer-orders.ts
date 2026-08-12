@@ -13,6 +13,7 @@ import {
   normalizeSubsOrderRow,
   type CustomerOrderView,
 } from "@/lib/dashboard/customer-order-view";
+import { coerceOrderStatus } from "@/lib/dashboard/order-status-tracker";
 
 function normalizeEmail(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -72,8 +73,69 @@ function collapseDuplicateUnpaidOrders(orders: CustomerOrderView[]): CustomerOrd
   return out;
 }
 
+function isActivatedCustomerStatus(status: string): boolean {
+  const s = coerceOrderStatus(status);
+  return s === "active" || s === "activated" || s === "completed";
+}
+
+function isPaidLikeCollapsibleStatus(status: string): boolean {
+  const s = coerceOrderStatus(status);
+  return [
+    "paid",
+    "activating",
+    "waiting_client",
+    "active",
+    "processing",
+    "awaiting_operator",
+    "awaiting_data",
+    "activated",
+    "completed",
+  ].includes(s);
+}
+
+/**
+ * Один paid-like заказ на тариф в кабинете (twin’ы shel.put и т.п.).
+ * Приоритет: активированный → с activated_at → новейший created_at.
+ */
+function collapseDuplicatePaidLikeOrders(orders: CustomerOrderView[]): CustomerOrderView[] {
+  const groups = new Map<string, CustomerOrderView[]>();
+  const rest: CustomerOrderView[] = [];
+
+  for (const order of orders) {
+    if (!isPaidLikeCollapsibleStatus(order.status)) {
+      rest.push(order);
+      continue;
+    }
+    const key = order.plan_id || order.id;
+    const list = groups.get(key) ?? [];
+    list.push(order);
+    groups.set(key, list);
+  }
+
+  const picked: CustomerOrderView[] = [];
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      const aAct = isActivatedCustomerStatus(a.status) ? 1 : 0;
+      const bAct = isActivatedCustomerStatus(b.status) ? 1 : 0;
+      if (aAct !== bAct) return bAct - aAct;
+
+      const aActAt = a.activated_at ? new Date(a.activated_at).getTime() : 0;
+      const bActAt = b.activated_at ? new Date(b.activated_at).getTime() : 0;
+      if (aActAt !== bActAt) return bActAt - aActAt;
+
+      return (
+        new Date(getCustomerOrderRecencyIso(b)).getTime() -
+        new Date(getCustomerOrderRecencyIso(a)).getTime()
+      );
+    });
+    picked.push(list[0]!);
+  }
+
+  return sortOrdersNewestFirst([...rest, ...picked]);
+}
+
 function finalizeCustomerOrders(orders: CustomerOrderView[]): CustomerOrderView[] {
-  return collapseDuplicateUnpaidOrders(dedupeOrders(orders));
+  return collapseDuplicatePaidLikeOrders(collapseDuplicateUnpaidOrders(dedupeOrders(orders)));
 }
 
 function isGptOrderProduct(product: string): boolean {

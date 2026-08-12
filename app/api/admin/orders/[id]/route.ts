@@ -15,6 +15,10 @@ import {
   subsPaymentStatusForOrderStatus,
 } from "@/lib/admin/patch-subs-order-status";
 import {
+  cascadeActivateGptSiblingOrders,
+  cascadeActivateSubsSiblingOrders,
+} from "@/lib/admin/cascade-activate-sibling-orders";
+import {
   inferGptPlanDurationMonths,
   resolveOrderSubscriptionExpiresAt,
 } from "@/lib/admin/admin-subscription-label";
@@ -112,6 +116,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Не удалось обновить" }, { status: 500 });
     }
 
+    if (nextSubs === "activated" || nextSubs === "completed") {
+      void cascadeActivateSubsSiblingOrders(subsCtx.subs, {
+        userId: order.user_id,
+        tariffId: order.tariff_id,
+        excludeOrderId: orderId,
+        planTitle: order.planTitle,
+        durationMonths: order.durationMonths,
+      }).catch((err) => console.error("[admin/orders PATCH subs cascade]", err));
+    }
+
     const userId = order.user_id;
     const planTitle = order.planTitle;
 
@@ -189,18 +203,26 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     status: OrderStatus;
     activated_at?: string;
     expires_at?: string;
+    paid_at?: string;
   } = { status: next };
+
+  const nowIso = new Date().toISOString();
+  const paidLikeNext =
+    next === "paid" || next === "activating" || next === "waiting_client" || next === "active";
+  if (paidLikeNext && !order.paid_at) {
+    gptUpdate.paid_at = nowIso;
+  }
+
   if (next === "active") {
-    const nowIso = new Date().toISOString();
     if (!order.activated_at) gptUpdate.activated_at = nowIso;
     if (!order.expires_at) {
-      const planTitle = order.plan_name?.trim() || String(order.plan_id ?? "");
+      const planTitleForExpiry = order.plan_name?.trim() || String(order.plan_id ?? "");
       const expiresAt = resolveOrderSubscriptionExpiresAt({
         activated_at: (order.activated_at as string | null) ?? nowIso,
-        paid_at: (order.paid_at as string | null) ?? null,
+        paid_at: (order.paid_at as string | null) ?? gptUpdate.paid_at ?? null,
         created_at: (order.created_at as string | null) ?? null,
-        durationMonths: inferGptPlanDurationMonths(String(order.plan_id ?? ""), planTitle),
-        planTitle,
+        durationMonths: inferGptPlanDurationMonths(String(order.plan_id ?? ""), planTitleForExpiry),
+        planTitle: planTitleForExpiry,
       });
       if (expiresAt) gptUpdate.expires_at = expiresAt;
     }
@@ -212,6 +234,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
 
   const planTitle = order.plan_name?.trim() || order.plan_id;
+
+  if (next === "active") {
+    void cascadeActivateGptSiblingOrders(admin, {
+      userId: order.user_id,
+      planId: order.plan_id,
+      excludeOrderId: orderId,
+      planTitle,
+    }).catch((err) => console.error("[admin/orders PATCH gpt cascade]", err));
+  }
   const meta = order.meta as Record<string, unknown> | null;
   const siteSlug =
     order.product === "spotify-premium" || meta?.site === "subs-store"

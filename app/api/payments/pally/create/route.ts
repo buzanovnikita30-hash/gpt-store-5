@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { resolveGptCheckoutPlan, upsertGptPendingOrder } from "@/lib/checkout/resolve-gpt-checkout";
+import {
+  isGptUnpaidReuseStatus,
+  resolveGptCheckoutPlan,
+  upsertGptPendingOrder,
+} from "@/lib/checkout/resolve-gpt-checkout";
 import { ensureGptProfile } from "@/lib/orders/create-gpt-order";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { appendCheckoutReturnCookie } from "@/lib/payments/checkout-return-cookie";
@@ -53,7 +57,11 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     await ensureGptProfile(admin, user);
 
-    const { order, error: orderError } = await upsertGptPendingOrder(admin, {
+    const {
+      order,
+      error: orderError,
+      created: createdNew,
+    } = await upsertGptPendingOrder(admin, {
       userId: user.id,
       accountEmail: accountEmail?.trim() || user.email?.trim() || null,
       resolved: resolvedPlan.resolved,
@@ -68,14 +76,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await insertGptCustomerNotification({
-      recipientUserId: user.id,
-      type: "new_order",
-      title: "Заказ создан",
-      message: `${plan.name} · ${finalPrice} ₽`,
-      entity_type: "order",
-      entity_id: order.id,
-    }).catch(() => {});
+    // Уже оплачен / в работе — не создаём второй счёт Pally и не плодим twin.
+    if (!isGptUnpaidReuseStatus(order.status)) {
+      return appendCheckoutReturnCookie(
+        NextResponse.json(
+          {
+            error: "Заказ уже оплачен и обрабатывается. Статус смотрите в личном кабинете.",
+            orderId: order.id,
+            alreadyOpen: true,
+          },
+          { status: 409 },
+        ),
+        "gpt-store",
+        order.id,
+      );
+    }
+
+    if (createdNew) {
+      await insertGptCustomerNotification({
+        recipientUserId: user.id,
+        type: "new_order",
+        title: "Заказ создан",
+        message: `${plan.name} · ${finalPrice} ₽`,
+        entity_type: "order",
+        entity_id: order.id,
+      }).catch(() => {});
+    }
 
     const { getPallyAppUrlFromRequest } = await import("@/lib/app-url");
     const appUrl = getPallyAppUrlFromRequest(request, "gpt-store");
@@ -123,36 +149,38 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", order.id);
 
-    const accountEmailValue = accountEmail?.trim() || user.email || null;
-    await notifyNewOrder(
-      {
-        id: order.id,
-        plan_name: plan.name,
-        price: finalPrice,
-        account_email: accountEmailValue,
-        product: plan.productId ?? "chatgpt-plus",
-      },
-      { email: user.email ?? null },
-      { siteSlug: "gpt-store" },
-    ).catch(() => {});
+    if (createdNew) {
+      const accountEmailValue = accountEmail?.trim() || user.email || null;
+      await notifyNewOrder(
+        {
+          id: order.id,
+          plan_name: plan.name,
+          price: finalPrice,
+          account_email: accountEmailValue,
+          product: plan.productId ?? "chatgpt-plus",
+        },
+        { email: user.email ?? null },
+        { siteSlug: "gpt-store" },
+      ).catch(() => {});
 
-    if (user.email) {
-      await notifyCustomerOrderCreated({
-        customerEmail: user.email,
-        customerUserId: user.id,
-        orderId: order.id,
-        planName: plan.name,
-        price: finalPrice,
-        accountEmail: accountEmail?.trim() || undefined,
-        siteSlug: "gpt-store",
-      }).catch(() => {});
-      await scheduleUnpaidOrderReminder({
-        siteSlug: "gpt-store",
-        orderId: order.id,
-        recipientEmail: user.email,
-        planName: plan.name,
-        price: finalPrice,
-      }).catch(() => {});
+      if (user.email) {
+        await notifyCustomerOrderCreated({
+          customerEmail: user.email,
+          customerUserId: user.id,
+          orderId: order.id,
+          planName: plan.name,
+          price: finalPrice,
+          accountEmail: accountEmail?.trim() || undefined,
+          siteSlug: "gpt-store",
+        }).catch(() => {});
+        await scheduleUnpaidOrderReminder({
+          siteSlug: "gpt-store",
+          orderId: order.id,
+          recipientEmail: user.email,
+          planName: plan.name,
+          price: finalPrice,
+        }).catch(() => {});
+      }
     }
 
     const response = NextResponse.json({ paymentUrl: payment.paymentUrl, orderId: order.id });

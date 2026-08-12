@@ -103,6 +103,11 @@ export function CustomerOrderCard({
       </div>
 
       <div className="space-y-3 px-5 py-4">
+        {live.pollError ? (
+          <p className={cn("text-xs", isSubs ? "text-amber-400" : "text-amber-700")}>
+            {live.pollError}
+          </p>
+        ) : null}
         {awaitingPay && payEmail ? (
           <CompletePaymentButton
             siteSlug={siteSlug}

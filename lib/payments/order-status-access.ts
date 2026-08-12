@@ -40,8 +40,22 @@ export async function userOwnsOrder(
     .maybeSingle();
   if (!order) return false;
   if (order.user_id === userId) return true;
+
   const accountEmail = order.account_email?.trim().toLowerCase() ?? "";
-  return Boolean(email && accountEmail === email);
+  if (email && accountEmail === email) return true;
+
+  // Login email may differ from account_email (ChatGPT login) — match profile owner.
+  if (email && order.user_id) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", order.user_id)
+      .maybeSingle();
+    const profileEmail = profile?.email?.trim().toLowerCase() ?? "";
+    if (profileEmail && profileEmail === email) return true;
+  }
+
+  return false;
 }
 
 export async function canAccessOrderStatus(orderId: string, siteSlug: SiteSlug): Promise<boolean> {
@@ -58,7 +72,8 @@ export async function canAccessOrderStatus(orderId: string, siteSlug: SiteSlug):
     } = await bundle.browserLike.auth.getUser();
     if (!user) return false;
     return userOwnsOrder(siteSlug, orderId, user.id, user.email ?? null);
-  } catch {
+  } catch (err) {
+    console.error("[order-status-access] session check failed", siteSlug, orderId, err);
     return false;
   }
 }

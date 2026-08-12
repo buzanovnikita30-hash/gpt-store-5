@@ -31,14 +31,35 @@ export function OperatorPanel({ currentUser, siteSlug }: OperatorPanelProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  /** Сохраняем order_id из ссылки «Чат», т.к. clearPendingRoomFromUrl удаляет его из URL. */
+  const [lockedOrderId, setLockedOrderId] = useState<string | null>(null);
+  /** Focus-заказ из карточки — для quick-replies → PATCH. */
+  const [focusOrderId, setFocusOrderId] = useState<string | null>(null);
+  /** Триггер refetch карточки после quick-reply status. */
+  const [sidebarRefreshTick, setSidebarRefreshTick] = useState(0);
 
   const staffBase = currentUser.role === "operator" ? "/operator" : "/admin";
   const site = getSiteBySlug(siteSlug === "subs-store" ? "subs-store" : "gpt-store");
   const accent = site.primaryColor;
 
   useEffect(() => {
+    if (pendingOrderId?.trim()) {
+      setLockedOrderId(pendingOrderId.trim());
+    }
+  }, [pendingOrderId]);
+
+  useEffect(() => {
     if (pendingRoomId) setTab("clients");
   }, [pendingRoomId]);
+
+  const selectRoom = useCallback((room: ChatRoomListItem | null) => {
+    setSelectedRoom(room);
+    setFocusOrderId(null);
+    // Ручной выбор комнаты без order_id в URL — сбрасываем lock, иначе stale order.
+    if (!pendingOrderId) {
+      setLockedOrderId(null);
+    }
+  }, [pendingOrderId]);
 
   const clearPendingRoomFromUrl = useCallback(() => {
     if (!pendingRoomId && !pendingClientId && !pendingClientEmail && !pendingOrderId) return;
@@ -250,7 +271,7 @@ export function OperatorPanel({ currentUser, siteSlug }: OperatorPanelProps) {
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RoomList
                 selectedClientId={selectedRoom?.client_id ?? null}
-                onSelect={setSelectedRoom}
+                onSelect={selectRoom}
                 siteSlug={siteSlug}
                 pendingSelectRoomId={pendingRoomId}
                 pendingSelectClientId={pendingClientId && !pendingRoomId ? pendingClientId : null}
@@ -306,6 +327,10 @@ export function OperatorPanel({ currentUser, siteSlug }: OperatorPanelProps) {
                   }
                   viewerIsStaff
                   siteSlug={siteSlug}
+                  focusOrderId={focusOrderId ?? lockedOrderId ?? pendingOrderId}
+                  onFocusOrderStatusChange={() => {
+                    setSidebarRefreshTick((n) => n + 1);
+                  }}
                 />
               )}
               {!selectedRoom && (
@@ -322,7 +347,9 @@ export function OperatorPanel({ currentUser, siteSlug }: OperatorPanelProps) {
               room={selectedRoom}
               staffBasePath={staffBase}
               siteSlug={siteSlug === "subs-store" ? "subs-store" : "gpt-store"}
-              highlightOrderId={pendingOrderId}
+              highlightOrderId={lockedOrderId ?? pendingOrderId}
+              refreshTick={sidebarRefreshTick}
+              onFocusOrderIdChange={setFocusOrderId}
             />
           </div>
         </div>

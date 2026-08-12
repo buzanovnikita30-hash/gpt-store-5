@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { tryCreateSubsBrowserClient } from "@/lib/supabase/subs-browser-client";
@@ -13,6 +13,8 @@ export type OrderLiveStatusState = {
   status: string;
   paidLike: boolean;
   paidAt: string | null;
+  /** Последняя ошибка poll (403/5xx/сеть) — не молчим на залипшем SSR. */
+  pollError: string | null;
 };
 
 /**
@@ -28,7 +30,9 @@ export function useOrderLiveStatus(
     status: initial,
     paidLike: !["pending", "awaiting_payment", "new", "pending_payment_setup"].includes(initial),
     paidAt: null,
+    pollError: null,
   }));
+  const loggedFailRef = useRef(false);
 
   useEffect(() => {
     const next = coerceOrderStatus(initialStatus);
@@ -40,6 +44,7 @@ export function useOrderLiveStatus(
 
   useEffect(() => {
     let cancelled = false;
+    loggedFailRef.current = false;
 
     const pollApi = async () => {
       try {
@@ -47,7 +52,21 @@ export function useOrderLiveStatus(
           `/api/dashboard/order-status?orderId=${encodeURIComponent(orderId)}&site=${encodeURIComponent(siteSlug)}`,
           { credentials: "include", cache: "no-store" },
         );
-        if (!res.ok || cancelled) return;
+        if (cancelled) return;
+        if (!res.ok) {
+          const msg =
+            res.status === 403
+              ? "Нет доступа к статусу заказа"
+              : res.status === 404
+                ? "Заказ не найден"
+                : `Ошибка статуса (${res.status})`;
+          if (!loggedFailRef.current) {
+            loggedFailRef.current = true;
+            console.warn("[useOrderLiveStatus]", siteSlug, orderId, msg);
+          }
+          setState((prev) => ({ ...prev, pollError: msg }));
+          return;
+        }
         const data = (await res.json()) as {
           effectiveStatus?: string;
           paidLike?: boolean;
@@ -58,10 +77,16 @@ export function useOrderLiveStatus(
             status: coerceOrderStatus(data.effectiveStatus),
             paidLike: Boolean(data.paidLike),
             paidAt: data.paid_at ?? null,
+            pollError: null,
           });
         }
       } catch {
-        /* retry on next tick */
+        if (cancelled) return;
+        if (!loggedFailRef.current) {
+          loggedFailRef.current = true;
+          console.warn("[useOrderLiveStatus] network", siteSlug, orderId);
+        }
+        setState((prev) => ({ ...prev, pollError: "Сеть: статус не обновлён" }));
       }
     };
 

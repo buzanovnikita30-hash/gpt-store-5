@@ -10,6 +10,7 @@ import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
 import { subsOrderStatusLabelRu } from "@/lib/admin/subs-order-status-labels";
 import { buildOrdersClientParam } from "@/lib/admin/orders-client-filter";
 import { staffNavHref } from "@/lib/admin/staffNavHref";
+import { isPaidLikeStatus } from "@/lib/orders/paid-like-status";
 import { getSiteBySlug } from "@/lib/sites";
 import { createClient } from "@/lib/supabase/client";
 import { tryCreateSubsBrowserClient } from "@/lib/supabase/subs-browser-client";
@@ -70,6 +71,10 @@ interface Props {
   siteSlug?: "gpt-store" | "subs-store";
   /** Заказ из URL (?order_id=) — подсветить в карточке. */
   highlightOrderId?: string | null;
+  /** Инкремент снаружи (quick-reply PATCH) → silent refetch. */
+  refreshTick?: number;
+  /** Сообщить родителю id focus-заказа для staff quick-replies. */
+  onFocusOrderIdChange?: (orderId: string | null) => void;
 }
 
 function statusLabel(siteSlug: "gpt-store" | "subs-store", status: string): string {
@@ -138,6 +143,8 @@ export function ClientContextSidebar({
   staffBasePath,
   siteSlug = "gpt-store",
   highlightOrderId = null,
+  refreshTick = 0,
+  onFocusOrderIdChange,
 }: Props) {
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -203,6 +210,11 @@ export function ClientContextSidebar({
   }, [loadSummary]);
 
   useEffect(() => {
+    if (!refreshTick) return;
+    void loadSummary({ silent: true });
+  }, [refreshTick, loadSummary]);
+
+  useEffect(() => {
     if (!room?.client_id) return;
     const supabase =
       siteSlug === "subs-store" ? tryCreateSubsBrowserClient() : createClient();
@@ -231,9 +243,24 @@ export function ClientContextSidebar({
   const siteBrand = getSiteBySlug(resolvedSite).brandName;
   const focusOrder = data?.focus_order ?? data?.active_order ?? null;
   const otherOrders = (data?.orders ?? []).filter((o) => o.id !== focusOrder?.id).slice(0, 5);
+  const planSiblings = focusOrder
+    ? (data?.orders ?? []).filter(
+        (o) =>
+          o.id !== focusOrder.id &&
+          o.plan_id === focusOrder.plan_id &&
+          isPaidLikeStatus(o.status, resolvedSite) &&
+          o.status !== "active" &&
+          o.status !== "activated" &&
+          o.status !== "completed",
+      )
+    : [];
   const focusIsPreferred = Boolean(
     focusOrder && effectiveOrderId && focusOrder.id === effectiveOrderId,
   );
+
+  useEffect(() => {
+    onFocusOrderIdChange?.(focusOrder?.id ?? null);
+  }, [focusOrder?.id, onFocusOrderIdChange]);
 
   if (process.env.NODE_ENV === "development" && data?.orders?.length) {
     const ids = data.orders.map((o) => o.id);
@@ -397,6 +424,40 @@ export function ClientContextSidebar({
                         </button>
                       ) : null}
                     </div>
+                  </div>
+                ) : null}
+                {planSiblings.length > 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                      Ещё заказы по тарифу
+                    </p>
+                    <p className="mt-1 text-[11px] text-amber-900/80">
+                      У клиента несколько заказов на тот же тариф — статусы могут отличаться. При
+                      «Активировано» twin’ы закрываются автоматически.
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {planSiblings.map((o) => (
+                        <li
+                          key={o.id}
+                          className="rounded-lg border border-amber-100 bg-white px-2.5 py-1.5 text-xs"
+                        >
+                          <p className="font-medium text-gray-800">
+                            {statusLabel(resolvedSite, o.status)} · {o.price.toLocaleString("ru")} ₽
+                          </p>
+                          <p className="break-all font-mono text-[10px] text-gray-600">{o.id}</p>
+                          <button
+                            type="button"
+                            className="mt-1 text-[11px] font-medium text-[#10a37f] hover:underline"
+                            onClick={() => {
+                              setPreferredOrderId(o.id);
+                              void loadSummary({ silent: true, orderIdOverride: o.id });
+                            }}
+                          >
+                            Показать этот заказ
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 ) : null}
                 {otherOrders.length > 0 ? (

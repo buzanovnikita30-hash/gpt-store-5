@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { tryCreateSubsBrowserClient } from "@/lib/supabase/subs-browser-client";
 import type { ChatMessage, Profile } from "@/types";
 import { MessageBubble, type ChatUiVariant } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -13,7 +14,11 @@ import {
   OPERATOR_CHAT_QUICK_REPLIES,
 } from "@/lib/chat/scriptedFaq";
 import { firstUnreadMessageId, replyAuthorLabel } from "@/lib/chat/message-utils";
-import { STAFF_CHAT_QUICK_REPLIES } from "@/lib/chat/staff-quick-replies";
+import {
+  STAFF_CHAT_QUICK_REPLIES,
+  staffQuickReplyTargetStatus,
+  type StaffQuickReply,
+} from "@/lib/chat/staff-quick-replies";
 import { playChatMessagePing } from "@/lib/admin/notification-sound";
 import { refreshStaffNavBadges } from "@/lib/admin/staff-nav-badges-client";
 import { cn } from "@/lib/utils";
@@ -33,6 +38,10 @@ interface ChatWindowProps {
   siteSlug?: string;
   /** Скрыть шапку (если заголовок уже в родителе, напр. боковая панель) */
   hideHeader?: boolean;
+  /** Focus-заказ из карточки клиента — для quick-replies → PATCH статуса */
+  focusOrderId?: string | null;
+  /** После успешной смены статуса quick-reply (refetch карточки). */
+  onFocusOrderStatusChange?: (nextStatus: string) => void;
 }
 
 function messageIsOwn(msg: ChatMessage, currentUserId: string, viewerIsStaff: boolean, siteSlug?: string): boolean {
@@ -55,15 +64,21 @@ export function ChatWindow({
   viewerIsStaff,
   siteSlug,
   hideHeader = false,
+  focusOrderId = null,
+  onFocusOrderStatusChange,
 }: ChatWindowProps) {
   /** Тёмная тема Subs — только клиентский кабинет; в админке всегда светлый GPT-стиль */
   const isSubsClient = siteSlug === "subs-store" && !viewerIsStaff;
   const chatVariant: ChatUiVariant = isSubsClient ? "subs" : "gpt";
   const isSubs = chatVariant === "subs";
   const accent = siteSlug === "subs-store" ? "#1DB954" : "#10a37f";
+  const staffSiteSlug: "gpt-store" | "subs-store" =
+    siteSlug === "subs-store" ? "subs-store" : "gpt-store";
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quickReplyStatusError, setQuickReplyStatusError] = useState<string | null>(null);
+  const [quickReplyStatusBusy, setQuickReplyStatusBusy] = useState(false);
   const [headerPulse, setHeaderPulse] = useState(false);
   const [faqTyping, setFaqTyping] = useState(false);
   const [faqSending, setFaqSending] = useState(false);
@@ -76,7 +91,17 @@ export function ChatWindow({
   const bottomRef = useRef<HTMLDivElement>(null);
   const forceScrollRef = useRef(false);
   const lastSeenMessageIdRef = useRef<string | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const subsSupabase = useMemo(() => tryCreateSubsBrowserClient(), []);
+
+  const mergeById = useCallback((prev: ChatMessage[], additions: ChatMessage[]) => {
+    const map = new Map<string, ChatMessage>();
+    for (const m of prev) map.set(m.id, m);
+    for (const m of additions) map.set(m.id, m);
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  }, []);
 
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
@@ -135,7 +160,8 @@ export function ChatWindow({
           : undefined);
         throw new Error(hint ?? "Ошибка загрузки");
       }
-      setMessages(data.messages ?? []);
+      const loadedMessages = data.messages ?? [];
+      setMessages((current) => (silent ? mergeById(current, loadedMessages) : loadedMessages));
       if (viewerIsStaff) {
         refreshStaffNavBadges();
       }
@@ -146,9 +172,10 @@ export function ChatWindow({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [sessionId, siteSlug, viewerIsStaff]);
+  }, [sessionId, siteSlug, viewerIsStaff, mergeById]);
 
   useEffect(() => {
+    setMessages([]);
     void loadMessages();
     setInitialScrollDone(false);
   }, [loadMessages]);
@@ -184,9 +211,11 @@ export function ChatWindow({
   }, [messages, scrollToBottom, isNearBottom, firstUnreadId, initialScrollDone, updateScrollDownVisible]);
 
   useEffect(() => {
-    if (siteSlug === "subs-store") return;
+    const realtimeClient = siteSlug === "subs-store" ? subsSupabase : supabase;
+    if (!realtimeClient) return;
+    const filterColumn = siteSlug === "subs-store" ? "thread_id" : "session_id";
 
-    const channel = supabase
+    const channel = realtimeClient
       .channel(`chat-session:${sessionId}`)
       .on(
         "postgres_changes",
@@ -194,14 +223,15 @@ export function ChatWindow({
           event: "INSERT",
           schema: "public",
           table: "chat_messages",
-          filter: `session_id=eq.${sessionId}`,
+          filter: `${filterColumn}=eq.${sessionId}`,
         },
         (payload) => {
-          const row = payload.new as ChatMessage;
+          const row = payload.new as ChatMessage & { author_role?: string };
+          const senderType = row.sender_type ?? row.author_role;
           if (
             !viewerIsStaff &&
-            row?.sender_type &&
-            ["operator", "admin"].includes(row.sender_type) &&
+            senderType &&
+            ["operator", "admin", "super_admin"].includes(senderType) &&
             row.sender_id !== currentUser.id
           ) {
             setHeaderPulse(true);
@@ -226,9 +256,17 @@ export function ChatWindow({
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(channel);
+      void realtimeClient.removeChannel(channel);
     };
-  }, [sessionId, supabase, loadMessages, viewerIsStaff, currentUser.id, siteSlug]);
+  }, [
+    sessionId,
+    supabase,
+    subsSupabase,
+    loadMessages,
+    viewerIsStaff,
+    currentUser.id,
+    siteSlug,
+  ]);
 
   useEffect(() => {
     if (viewerIsStaff || typeof Notification === "undefined") return;
@@ -239,21 +277,12 @@ export function ChatWindow({
 
   /** Резерв, если Realtime не доставляет события (репликация / RLS). */
   useEffect(() => {
-    const intervalMs = siteSlug === "subs-store" ? 6000 : 10000;
+    const intervalMs = siteSlug === "subs-store" ? 20_000 : 15_000;
     const t = window.setInterval(() => {
-      void loadMessages({ silent: true });
+      if (document.visibilityState === "visible") void loadMessages({ silent: true });
     }, intervalMs);
     return () => window.clearInterval(t);
   }, [sessionId, loadMessages, siteSlug]);
-
-  const mergeById = useCallback((prev: ChatMessage[], additions: ChatMessage[]) => {
-    const map = new Map<string, ChatMessage>();
-    for (const m of prev) map.set(m.id, m);
-    for (const m of additions) map.set(m.id, m);
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-  }, []);
 
   const postChatMessage = useCallback(
     async (
@@ -423,6 +452,47 @@ export function ChatWindow({
     if (last && last.date === date) last.messages.push(msg);
     else grouped.push({ date, messages: [msg] });
   }
+
+  const applyStaffQuickReply = useCallback(
+    async (reply: StaffQuickReply) => {
+      setStaffInsertText(reply.message);
+      setQuickReplyStatusError(null);
+
+      const nextStatus = staffQuickReplyTargetStatus(reply, staffSiteSlug);
+      if (!nextStatus) return;
+
+      if (!focusOrderId) {
+        setQuickReplyStatusError(
+          "Нет выбранного заказа справа — статус не изменён. Смените вручную в карточке.",
+        );
+        return;
+      }
+
+      setQuickReplyStatusBusy(true);
+      try {
+        const res = await fetch(
+          `/api/admin/orders/${encodeURIComponent(focusOrderId)}?site=${encodeURIComponent(staffSiteSlug)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ status: nextStatus }),
+          },
+        );
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          setQuickReplyStatusError(json.error ?? "Не удалось сменить статус заказа");
+          return;
+        }
+        onFocusOrderStatusChange?.(nextStatus);
+      } catch {
+        setQuickReplyStatusError("Сеть: статус заказа не обновлён");
+      } finally {
+        setQuickReplyStatusBusy(false);
+      }
+    },
+    [focusOrderId, onFocusOrderStatusChange, staffSiteSlug],
+  );
 
   const closed = roomStatus === "closed";
 
@@ -642,22 +712,33 @@ export function ChatWindow({
             )}
           >
             <div className="flex flex-wrap gap-1.5 pb-2 md:flex-nowrap md:overflow-x-auto">
-              {STAFF_CHAT_QUICK_REPLIES.map(({ label, message }) => (
+              {STAFF_CHAT_QUICK_REPLIES.map((reply) => (
                 <button
-                  key={message}
+                  key={reply.message}
                   type="button"
-                  onClick={() => setStaffInsertText(message)}
+                  disabled={quickReplyStatusBusy}
+                  onClick={() => void applyStaffQuickReply(reply)}
                   className={cn(
-                    "max-w-full rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:shrink-0",
+                    "max-w-full rounded-full border px-3 py-1.5 text-xs font-medium transition-colors md:shrink-0 disabled:opacity-50",
                     isSubs
                       ? "border-[#1DB954]/40 text-[#1DB954] hover:bg-[#1DB954]/10"
                       : "border-[#10a37f]/40 text-[#0f7d62] hover:bg-[#10a37f]/8",
                   )}
+                  title={
+                    staffQuickReplyTargetStatus(reply, staffSiteSlug)
+                      ? "Вставит текст и сменит статус выбранного заказа"
+                      : "Вставит текст в поле ввода"
+                  }
                 >
-                  {label}
+                  {reply.label}
                 </button>
               ))}
             </div>
+            {quickReplyStatusError ? (
+              <p className="pb-2 text-[11px] text-red-600" role="alert">
+                {quickReplyStatusError}
+              </p>
+            ) : null}
           </div>
         )}
 

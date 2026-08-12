@@ -69,7 +69,40 @@ export async function resolveGptCheckoutPlan(
 
 type Admin = SupabaseClient<Database>;
 
-const GPT_UNPAID_STATUS_FILTER = "status.eq.pending,status.eq.awaiting_payment";
+/** Неоплаченные — можно обновлять и снова вести на Pally. (awaiting_payment — legacy rows) */
+export const GPT_UNPAID_REUSE_STATUSES = ["pending", "awaiting_payment"] as const;
+
+/**
+ * Уже оплаченные, но ещё не активированные — не плодим twin при повторном Pay.
+ * active/failed/expired/refunded не reuse (новый цикл покупки ок).
+ */
+export const GPT_OPEN_FULFILLMENT_STATUSES = ["paid", "activating", "waiting_client"] as const;
+
+export const GPT_REUSABLE_STATUSES = [
+  ...GPT_UNPAID_REUSE_STATUSES,
+  ...GPT_OPEN_FULFILLMENT_STATUSES,
+] as const;
+
+const GPT_UNPAID_OR = "status.eq.pending,status.eq.awaiting_payment";
+const GPT_REUSABLE_OR =
+  "status.eq.pending,status.eq.awaiting_payment,status.eq.paid,status.eq.activating,status.eq.waiting_client";
+const GPT_OPEN_OR = "status.eq.paid,status.eq.activating,status.eq.waiting_client";
+
+export function isGptUnpaidReuseStatus(status: string | null | undefined): boolean {
+  const s = String(status ?? "").trim().toLowerCase();
+  return s === "pending" || s === "awaiting_payment";
+}
+
+export function isGptReusableCheckoutStatus(status: string | null | undefined): boolean {
+  const s = String(status ?? "").trim().toLowerCase();
+  return (
+    s === "pending" ||
+    s === "awaiting_payment" ||
+    s === "paid" ||
+    s === "activating" ||
+    s === "waiting_client"
+  );
+}
 
 async function findReusableGptOrder(
   admin: Admin,
@@ -88,27 +121,50 @@ async function findReusableGptOrder(
       .select("*")
       .eq("id", input.existingOrderId)
       .eq("user_id", input.userId)
-      .or(GPT_UNPAID_STATUS_FILTER)
+      .or(GPT_REUSABLE_OR)
       .maybeSingle();
     if (byId) return byId;
   }
 
-  let query = admin
-    .from("orders")
-    .select("*")
-    .eq("user_id", input.userId)
-    .eq("plan_id", input.planId)
-    .or(GPT_UNPAID_STATUS_FILTER)
-    .order("created_at", { ascending: false })
-    .limit(1);
+  // 1) unpaid twin first
+  {
+    let unpaidQuery = admin
+      .from("orders")
+      .select("*")
+      .eq("user_id", input.userId)
+      .eq("plan_id", input.planId)
+      .or(GPT_UNPAID_OR)
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-  if (email) {
-    query = query.ilike("account_email", email);
+    if (email) {
+      unpaidQuery = unpaidQuery.ilike("account_email", email);
+    }
+
+    const { data: unpaid } = await unpaidQuery.maybeSingle();
+    if (unpaid) return unpaid;
   }
 
-  const { data: byMatch } = await query.maybeSingle();
+  // 2) open fulfillment (paid / in progress) — block second order
+  {
+    let openQuery = admin
+      .from("orders")
+      .select("*")
+      .eq("user_id", input.userId)
+      .eq("plan_id", input.planId)
+      .or(GPT_OPEN_OR)
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-  return byMatch ?? null;
+    if (email) {
+      openQuery = openQuery.ilike("account_email", email);
+    }
+
+    const { data: open } = await openQuery.maybeSingle();
+    if (open) return open;
+  }
+
+  return null;
 }
 
 export async function upsertGptPendingOrder(
@@ -136,6 +192,11 @@ export async function upsertGptPendingOrder(
   });
 
   if (existing) {
+    // Уже в работе после оплаты — не откатываем в pending и не плодим twin.
+    if (!isGptUnpaidReuseStatus(existing.status)) {
+      return { order: existing, error: null, created: false };
+    }
+
     const { data: updated, error: updateErr } = await admin
       .from("orders")
       .update({

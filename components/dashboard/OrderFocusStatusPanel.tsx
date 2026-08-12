@@ -29,6 +29,11 @@ export function OrderFocusStatusPanel({ orderId, siteSlug, initialStatus, isSubs
       <p className={cn("text-sm font-bold", isSubs ? "text-white" : "text-gray-900")}>
         Статус заказа: {customerOrderStatusLabelRu(siteSlug, liveStatus)}
       </p>
+      {live.pollError ? (
+        <p className={cn("mt-1 text-xs", isSubs ? "text-amber-400" : "text-amber-700")}>
+          {live.pollError}
+        </p>
+      ) : null}
       <ul className={cn("mt-2 space-y-1 text-sm", isSubs ? "text-gray-300" : "text-gray-600")}>
         {lines.map((line, i) => (
           <li key={`${i}-${line}`}>{line}</li>
