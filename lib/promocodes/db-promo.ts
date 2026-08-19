@@ -28,6 +28,7 @@ function mapPromoRow(row: PromoRow, now: number): PromoCode {
     code: row.code.trim().toUpperCase(),
     type: row.discount_type,
     value: row.discount_value,
+    // Checkout ignores this flag; keep it for admin/UI lists.
     active,
     planIds: row.plan_ids?.length ? row.plan_ids : undefined,
     dbId: row.id,

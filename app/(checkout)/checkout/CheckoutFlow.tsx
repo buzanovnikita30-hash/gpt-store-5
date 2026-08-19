@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
@@ -13,6 +13,13 @@ import { startCheckoutPaymentWait } from "@/lib/checkout/start-payment-wait";
 import { useCheckoutAuthGate } from "@/hooks/useCheckoutAuthGate";
 import { trackGPTPayClick, trackGptSelectPlan } from "@/lib/metrics";
 import { buildCheckoutAuthUrl, persistCheckoutIntent } from "@/lib/checkout/checkout-auth";
+import {
+  capturePromoFromSearchParams,
+  normalizePromoCode,
+} from "@/lib/checkout/promo-capture";
+import { applyPromo } from "@/lib/promocodes/apply-promo";
+import { promoUserMessage, resolvePromoForPlan } from "@/lib/promocodes/promo-resolve";
+import type { PromoCode } from "@/lib/store-config";
 
 const ALL_PLANS = [...PLUS_PLANS, ...PRO_PLANS];
 
@@ -27,6 +34,7 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
   const [selectedPlan, setSelectedPlan] = useState<ExtendedPlan | null>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [promoCode, setPromoCode] = useState("");
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +47,40 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
   const selectedPlanIdRef = useRef<string | null>(null);
   const urlPlanInitDoneRef = useRef(false);
   const submittingRef = useRef(false);
+
+  useEffect(() => {
+    const fromUrl = capturePromoFromSearchParams(searchParams);
+    if (fromUrl) setPromoCode((prev) => prev || fromUrl);
+  }, [searchParams]);
+
+  const promoPreview = useMemo(() => {
+    const code = normalizePromoCode(promoCode);
+    if (!code || !selectedPlan) {
+      return { status: "idle" as const, finalPrice: selectedPlan?.price ?? 0, discountValue: 0 };
+    }
+    const resolved = resolvePromoForPlan(promoCodes, code, selectedPlan.id);
+    if (!resolved.ok) {
+      if (!promoCodes.length && resolved.reason === "not_found") {
+        return { status: "pending" as const, finalPrice: selectedPlan.price, discountValue: 0 };
+      }
+      return {
+        status: "invalid" as const,
+        reason: resolved.reason,
+        finalPrice: selectedPlan.price,
+        discountValue: 0,
+      };
+    }
+    const priced = applyPromo(selectedPlan.price, resolved.promo);
+    if (priced.discountValue <= 0) {
+      return {
+        status: "invalid" as const,
+        reason: "inactive" as const,
+        finalPrice: selectedPlan.price,
+        discountValue: 0,
+      };
+    }
+    return { status: "ok" as const, ...priced };
+  }, [promoCode, promoCodes, selectedPlan]);
 
   useEffect(() => {
     if (!authGate.ready || !authGate.intent) return;
@@ -86,7 +128,10 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
           credentials: "same-origin",
         });
         if (!res.ok) return;
-        const json = (await res.json()) as { plans?: ExtendedPlan[] };
+        const json = (await res.json()) as { plans?: ExtendedPlan[]; promoCodes?: PromoCode[] };
+        if (!cancelled && Array.isArray(json.promoCodes)) {
+          setPromoCodes(json.promoCodes.filter((p) => p?.code && Number(p.value) > 0));
+        }
         const next = (json.plans ?? []).filter(
           (p) => p?.id && p.price > 0 && p.inStock !== false,
         );
@@ -340,7 +385,16 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
                 <div className="flex items-center justify-between rounded-xl border border-black/[0.07] bg-gray-50 px-4 py-3">
                   <span className="text-sm text-gray-600">{selectedPlan.name}</span>
                   <span className="font-semibold text-gray-900 whitespace-nowrap">
-                    {selectedPlan.price.toLocaleString("ru")} ₽
+                    {promoPreview.status === "ok" ? (
+                      <>
+                        <span className="mr-2 text-sm font-normal text-gray-400 line-through">
+                          {selectedPlan.price.toLocaleString("ru")} ₽
+                        </span>
+                        {promoPreview.finalPrice.toLocaleString("ru")} ₽
+                      </>
+                    ) : (
+                      <>{selectedPlan.price.toLocaleString("ru")} ₽</>
+                    )}
                   </span>
                 </div>
                 {selectedPlan.id === "plus-ready" ? (
@@ -359,9 +413,17 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
-                placeholder="Например: SALE10"
+                placeholder="Например: COMP10"
                 className="w-full rounded-xl border border-black/[0.12] px-3.5 py-2.5 text-sm outline-none transition-shadow focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/30"
               />
+              {promoPreview.status === "ok" ? (
+                <p className="mt-1.5 text-xs font-medium text-[#10a37f]">
+                  Промокод применён: −{promoPreview.discountValue.toLocaleString("ru")} ₽
+                </p>
+              ) : null}
+              {promoPreview.status === "invalid" && promoCode.trim() ? (
+                <p className="mt-1.5 text-xs text-red-600">{promoUserMessage(promoPreview.reason)}</p>
+              ) : null}
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer mb-5">
@@ -399,12 +461,14 @@ export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }
               </button>
               <button
                 type="button"
-                disabled={!agreeTerms || isSubmitting}
+                disabled={!agreeTerms || isSubmitting || promoPreview.status === "invalid"}
                 onClick={onPaymentSubmit}
                 className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-[#10a37f] py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
               >
                 {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-                {isSubmitting ? "Создаём платёж..." : `Оплатить ${selectedPlan?.price.toLocaleString("ru")} ₽`}
+                {isSubmitting
+                  ? "Создаём платёж..."
+                  : `Оплатить ${promoPreview.finalPrice.toLocaleString("ru")} ₽`}
               </button>
             </div>
           </motion.div>

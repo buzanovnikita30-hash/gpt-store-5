@@ -10,13 +10,19 @@ import { cn } from "@/lib/utils";
 import { formatPallyCheckoutError } from "@/lib/payments/pally-env-hint";
 import { useCheckoutAuthGate } from "@/hooks/useCheckoutAuthGate";
 import { trackSpotifyPayClick, trackSpotifySelectPlan } from "@/lib/metrics";
+import { buildCheckoutAuthUrl, persistCheckoutIntent } from "@/lib/checkout/checkout-auth";
+import { startCheckoutPaymentWait } from "@/lib/checkout/start-payment-wait";
 import {
-  buildCheckoutAuthUrl,
-  getCheckoutSessionUser,
-  persistCheckoutIntent,
-} from "@/lib/checkout/checkout-auth";
+  capturePromoFromSearchParams,
+  normalizePromoCode,
+} from "@/lib/checkout/promo-capture";
+import { applyPromo } from "@/lib/promocodes/apply-promo";
+import { promoUserMessage, resolvePromoForPlan } from "@/lib/promocodes/promo-resolve";
+import type { PromoCode } from "@/lib/store-config";
 
 const STEPS = ["Выбор тарифа", "Оплата"];
+/** После логина продолжаем оплату без второго клика. */
+const PENDING_PAY_KEY = "subs-checkout-pending-pay";
 
 export function SpotifyCheckoutFlow() {
   const router = useRouter();
@@ -25,7 +31,7 @@ export function SpotifyCheckoutFlow() {
   const planIdFromUrl = searchParams.get("plan");
   const [step, setStep] = useState(1);
   const [plans, setPlans] = useState<SpotifyPlan[]>(SPOTIFY_PLANS);
-  const [promoCodes, setPromoCodes] = useState<{ code: string; active: boolean }[]>([]);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [plansSource, setPlansSource] = useState<"static" | "supabase">("static");
   const [selectedPlan, setSelectedPlan] = useState<SpotifyPlan | null>(null);
   const [promoCode, setPromoCode] = useState("");
@@ -36,6 +42,9 @@ export function SpotifyCheckoutFlow() {
   const plansHashRef = useRef(JSON.stringify(SPOTIFY_PLANS));
   const urlPlanInitDoneRef = useRef(false);
   const maxStepReachedRef = useRef(1);
+  const submittingRef = useRef(false);
+  const autoPayStartedRef = useRef(false);
+  const handlePayRef = useRef<(opts?: { termsAccepted?: boolean }) => Promise<void>>(async () => {});
   function goToStep(next: number) {
     maxStepReachedRef.current = Math.max(maxStepReachedRef.current, next);
     setStep(next);
@@ -53,7 +62,7 @@ export function SpotifyCheckoutFlow() {
         if (!r.ok) return;
         const j = (await r.json()) as {
           plans?: SpotifyPlan[];
-          promoCodes?: { code: string; active: boolean }[];
+          promoCodes?: PromoCode[];
           source?: string;
         };
         const nextPlans = j.plans?.length ? j.plans : null;
@@ -65,7 +74,9 @@ export function SpotifyCheckoutFlow() {
             setPlansSource(j.source === "supabase" ? "supabase" : "static");
           }
         }
-        if (j.promoCodes?.length) setPromoCodes(j.promoCodes.filter((p) => p.active));
+        if (Array.isArray(j.promoCodes)) {
+          setPromoCodes(j.promoCodes.filter((p) => p?.code && Number(p.value) > 0));
+        }
       } catch {
         /* static fallback */
       }
@@ -95,6 +106,11 @@ export function SpotifyCheckoutFlow() {
     maxStepReachedRef.current = Math.max(maxStepReachedRef.current, 2);
     trackSpotifySelectPlan(found.id, "checkout_url_or_intent");
   }, [planIdFromUrl, authGate.intent?.planId, authGate.ready, plans]);
+
+  useEffect(() => {
+    const fromUrl = capturePromoFromSearchParams(searchParams);
+    if (fromUrl) setPromoCode((prev) => prev || fromUrl);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authGate.ready || !authGate.intent) return;
@@ -130,10 +146,47 @@ export function SpotifyCheckoutFlow() {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
-  const displayPrice = useMemo(() => selectedPlan?.price ?? 0, [selectedPlan]);
+  const promoPreview = useMemo(() => {
+    const base = selectedPlan?.price ?? 0;
+    const code = normalizePromoCode(promoCode);
+    if (!code || !selectedPlan) {
+      return { status: "idle" as const, finalPrice: base, discountValue: 0 };
+    }
+    const resolved = resolvePromoForPlan(promoCodes, code, selectedPlan.id);
+    if (!resolved.ok) {
+      if (!promoCodes.length && resolved.reason === "not_found") {
+        return { status: "pending" as const, finalPrice: base, discountValue: 0 };
+      }
+      return {
+        status: "invalid" as const,
+        reason: resolved.reason,
+        finalPrice: base,
+        discountValue: 0,
+      };
+    }
+    const priced = applyPromo(base, resolved.promo);
+    if (priced.discountValue <= 0) {
+      return {
+        status: "invalid" as const,
+        reason: "inactive" as const,
+        finalPrice: base,
+        discountValue: 0,
+      };
+    }
+    return { status: "ok" as const, ...priced };
+  }, [promoCode, promoCodes, selectedPlan]);
 
-  async function handlePay() {
-    if (!selectedPlan || !agreeTerms) return;
+  const displayPrice = promoPreview.finalPrice;
+
+  async function handlePay(opts?: { termsAccepted?: boolean }) {
+    const termsOk = Boolean(opts?.termsAccepted || agreeTerms);
+    if (!selectedPlan) return;
+    if (!termsOk) {
+      setPayError("Отметьте согласие с офертой и политикой конфиденциальности");
+      return;
+    }
+    if (submittingRef.current || isSubmitting) return;
+    submittingRef.current = true;
 
     trackSpotifyPayClick(selectedPlan.id, "checkout_step2");
 
@@ -143,13 +196,6 @@ export function SpotifyCheckoutFlow() {
       planName: selectedPlan.name,
       promoCode: promoCode.trim() || null,
     });
-
-    const { user, emailConfirmed } = await getCheckoutSessionUser("subs-store");
-    if (!user || !emailConfirmed) {
-      const returnPath = `/checkout/spotify?plan=${encodeURIComponent(selectedPlan.id)}`;
-      window.location.assign(buildCheckoutAuthUrl("subs-store", returnPath));
-      return;
-    }
 
     setIsSubmitting(true);
     setPayError(null);
@@ -178,8 +224,14 @@ export function SpotifyCheckoutFlow() {
       }
       if (!res.ok || !json.paymentUrl) {
         const base = formatPallyCheckoutError(json.error ?? "Не удалось создать ссылку на оплату");
-        if (res.status === 401 && selectedPlan) {
-          router.push(buildCheckoutAuthUrl("subs-store", `/checkout/spotify?plan=${selectedPlan.id}`));
+        if (res.status === 401) {
+          try {
+            sessionStorage.setItem(PENDING_PAY_KEY, selectedPlan.id);
+          } catch {
+            /* private mode */
+          }
+          const returnPath = `/checkout/spotify?plan=${encodeURIComponent(selectedPlan.id)}`;
+          window.location.assign(buildCheckoutAuthUrl("subs-store", returnPath));
           return;
         }
         setPayError(
@@ -193,14 +245,58 @@ export function SpotifyCheckoutFlow() {
         setPayError("Не удалось привязать заказ к оплате. Попробуйте снова.");
         return;
       }
-      window.location.assign(json.paymentUrl);
+      try {
+        sessionStorage.removeItem(PENDING_PAY_KEY);
+      } catch {
+        /* ignore */
+      }
+      startCheckoutPaymentWait({
+        orderId: json.orderId,
+        siteSlug: "subs-store",
+        paymentUrl: json.paymentUrl,
+        router,
+      });
       return;
     } catch {
       setPayError("Ошибка сети. Попробуйте снова.");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   }
+
+  handlePayRef.current = handlePay;
+
+  // После логина — сразу создаём платёж (без второго клика «Оплатить»)
+  useEffect(() => {
+    if (!authGate.ready || !authGate.authenticated || !authGate.emailConfirmed) return;
+    if (!ready || !selectedPlan || step !== 2) return;
+    if (autoPayStartedRef.current || submittingRef.current) return;
+
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem(PENDING_PAY_KEY);
+    } catch {
+      return;
+    }
+    if (!pending || pending !== selectedPlan.id) return;
+
+    autoPayStartedRef.current = true;
+    try {
+      sessionStorage.removeItem(PENDING_PAY_KEY);
+    } catch {
+      /* ignore */
+    }
+    setAgreeTerms(true);
+    void handlePayRef.current({ termsAccepted: true });
+  }, [
+    authGate.ready,
+    authGate.authenticated,
+    authGate.emailConfirmed,
+    ready,
+    selectedPlan,
+    step,
+  ]);
 
   if (!authGate.ready || !ready) {
     return (
@@ -413,7 +509,18 @@ export function SpotifyCheckoutFlow() {
                 style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}
               >
                 <span className="font-medium text-white/90">Spotify Premium · {selectedPlan.name}</span>
-                <span className="text-xl font-bold text-white">{displayPrice.toLocaleString("ru")} ₽</span>
+                <span className="text-xl font-bold text-white">
+                  {promoPreview.status === "ok" && selectedPlan ? (
+                    <>
+                      <span className="mr-2 text-base font-normal text-white/40 line-through">
+                        {selectedPlan.price.toLocaleString("ru")} ₽
+                      </span>
+                      {displayPrice.toLocaleString("ru")} ₽
+                    </>
+                  ) : (
+                    <>{displayPrice.toLocaleString("ru")} ₽</>
+                  )}
+                </span>
               </div>
             )}
 
@@ -423,21 +530,30 @@ export function SpotifyCheckoutFlow() {
                 type="text"
                 value={promoCode}
                 onChange={(e) => setPromoCode(e.target.value)}
-                placeholder="Например: SALE10"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+                placeholder="Например: COMP10"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-[#1DB954] focus:ring-2 focus:ring-[#1DB954]/25"
               />
-              {promoCodes.length > 0 && (
-                <p className="mt-1.5 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Промокоды из админки SPOTIFY STORE применяются при оплате
+              {promoPreview.status === "ok" ? (
+                <p className="mt-1.5 text-xs font-medium" style={{ color: SPOTIFY_ACCENT }}>
+                  Промокод применён: −{promoPreview.discountValue.toLocaleString("ru")} ₽
                 </p>
-              )}
+              ) : null}
+              {promoPreview.status === "invalid" && promoCode.trim() ? (
+                <p className="mt-1.5 text-xs text-red-300">{promoUserMessage(promoPreview.reason)}</p>
+              ) : null}
             </div>
 
             <label className="mb-6 flex cursor-pointer items-start gap-2.5">
               <input
                 type="checkbox"
                 checked={agreeTerms}
-                onChange={(e) => setAgreeTerms(e.target.checked)}
+                onChange={(e) => {
+                  setAgreeTerms(e.target.checked);
+                  if (e.target.checked) setPayError(null);
+                }}
                 className="mt-0.5 h-4 w-4 rounded accent-[#1DB954]"
               />
               <span className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
@@ -469,7 +585,7 @@ export function SpotifyCheckoutFlow() {
               </button>
               <button
                 type="button"
-                disabled={!agreeTerms || isSubmitting}
+                disabled={isSubmitting || promoPreview.status === "invalid"}
                 onClick={() => void handlePay()}
                 className="inline-flex flex-[2] items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
                 style={{ background: SPOTIFY_ACCENT }}

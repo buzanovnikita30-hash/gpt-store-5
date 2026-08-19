@@ -9,6 +9,7 @@ import {
   saveCheckoutIntent,
   type CheckoutIntent,
 } from "@/lib/checkout/checkout-intent";
+import { readCapturedPromo } from "@/lib/checkout/promo-capture";
 
 export type CheckoutSessionState = {
   user: User | null;
@@ -29,10 +30,12 @@ export function buildCheckoutAuthUrl(siteSlug: AuthSiteSlug, returnPath: string)
 export async function getCheckoutSessionUser(siteSlug: AuthSiteSlug): Promise<CheckoutSessionState> {
   const empty: CheckoutSessionState = { user: null, emailConfirmed: false };
   try {
+    // Не обрывать сессию слишком рано: иначе checkout думает, что юзер гость,
+    // и «Оплатить» уводит на /login (похоже на обновление страницы).
     const result = await Promise.race([
       readCheckoutSessionUser(siteSlug),
       new Promise<CheckoutSessionState>((resolve) => {
-        setTimeout(() => resolve(empty), 2500);
+        setTimeout(() => resolve(empty), 8000);
       }),
     ]);
     return result;
@@ -46,8 +49,9 @@ async function readCheckoutSessionUser(siteSlug: AuthSiteSlug): Promise<Checkout
     if (siteSlug === "subs-store") {
       const subs = tryCreateSubsBrowserClient();
       if (!subs) return { user: null, emailConfirmed: false };
-      const { data: sessionData } = await subs.auth.getSession();
-      const sessionUser = sessionData.session?.user ?? null;
+      // getUser() валидирует сессию; getSession() иногда отдаёт null на холодном старте
+      const { data: userData } = await subs.auth.getUser();
+      const sessionUser = userData.user ?? null;
       return {
         user: sessionUser,
         emailConfirmed: Boolean(sessionUser?.email_confirmed_at),
@@ -55,8 +59,8 @@ async function readCheckoutSessionUser(siteSlug: AuthSiteSlug): Promise<Checkout
     }
 
     const gpt = createClient();
-    const { data: sessionData } = await gpt.auth.getSession();
-    const sessionUser = sessionData.session?.user ?? null;
+    const { data: userData } = await gpt.auth.getUser();
+    const sessionUser = userData.user ?? null;
     return {
       user: sessionUser,
       emailConfirmed: Boolean(sessionUser?.email_confirmed_at),
@@ -73,12 +77,13 @@ export function persistCheckoutIntent(params: {
   promoCode?: string | null;
   accountEmail?: string | null;
 }): CheckoutIntent {
-  const returnPath = buildCheckoutPath(params.siteSlug, params.planId);
+  const promoCode = params.promoCode?.trim() || readCapturedPromo();
+  const returnPath = buildCheckoutPath(params.siteSlug, params.planId, promoCode);
   const intent: Omit<CheckoutIntent, "createdAt"> = {
     siteSlug: params.siteSlug,
     planId: params.planId,
     planName: params.planName ?? null,
-    promoCode: params.promoCode ?? null,
+    promoCode: promoCode ?? null,
     accountEmail: params.accountEmail ?? null,
     returnPath,
   };
@@ -94,7 +99,6 @@ export async function navigateToCheckoutOrAuth(params: {
   router: AppRouterInstance;
 }): Promise<void> {
   const { siteSlug, planId, planName, promoCode, router } = params;
-  const returnPath = buildCheckoutPath(siteSlug, planId);
   persistCheckoutIntent({ siteSlug, planId, planName, promoCode });
-  router.push(returnPath);
+  router.push(buildCheckoutPath(siteSlug, planId, promoCode ?? readCapturedPromo()));
 }

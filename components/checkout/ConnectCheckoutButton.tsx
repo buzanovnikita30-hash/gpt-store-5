@@ -7,6 +7,7 @@ import type { AuthSiteSlug } from "@/lib/auth/detectAuthSite";
 import { trackGptSelectPlan, trackSpotifySelectPlan } from "@/lib/metrics";
 import { navigateToCheckoutOrAuth } from "@/lib/checkout/checkout-auth";
 import { getCheckoutEmailStepPath } from "@/lib/checkout/checkout-navigation";
+import { readCapturedPromo } from "@/lib/checkout/promo-capture";
 
 type ConnectCheckoutButtonProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick"> & {
   siteSlug: AuthSiteSlug;
@@ -30,6 +31,7 @@ export function ConnectCheckoutButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const checkoutPath = getCheckoutEmailStepPath(siteSlug, planId);
+  const effectivePromo = promoCode ?? readCapturedPromo();
 
   async function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
@@ -45,7 +47,7 @@ export function ConnectCheckoutButton({
         siteSlug,
         planId,
         planName,
-        promoCode,
+        promoCode: effectivePromo,
         router,
       });
     } finally {

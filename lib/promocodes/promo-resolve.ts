@@ -27,9 +27,13 @@ export function promoUserMessage(reason: PromoFailReason): string {
   return USER_SAFE[reason];
 }
 
+function isExhausted(promo: PromoCode): boolean {
+  return promo.maxUses != null && promo.usesCount != null && promo.usesCount >= promo.maxUses;
+}
+
 /**
- * Resolve promo with typed failure reasons (server logs get `technical`).
- * `codes` must already be scoped to the current store.
+ * Apply a store-scoped promo even if admin `is_active` is off or the date window lapsed.
+ * Still rejects unknown codes, exhausted max_uses, and plan-restricted codes.
  */
 export function resolvePromoForPlan(
   codes: PromoCode[],
@@ -50,30 +54,25 @@ export function resolvePromoForPlan(
     };
   }
 
-  const anyInactive = candidates.every((c) => !c.active);
-  if (anyInactive) {
+  const usable = candidates.filter((c) => !isExhausted(c));
+  if (!usable.length) {
     const sample = candidates[0]!;
-    if (sample.maxUses != null && sample.usesCount != null && sample.usesCount >= sample.maxUses) {
-      return {
-        ok: false,
-        reason: "exhausted",
-        technical: `uses ${sample.usesCount}/${sample.maxUses}`,
-      };
-    }
     return {
       ok: false,
-      reason: "inactive",
-      technical: `inactive_or_window:${normalized}`,
+      reason: "exhausted",
+      technical: `uses ${sample.usesCount}/${sample.maxUses}`,
     };
   }
 
-  const active = candidates.filter((c) => c.active);
-  const planMatch = active.find((c) => !c.planIds?.length || c.planIds.includes(planId));
+  const planMatch =
+    usable.find((c) => !c.planIds?.length || c.planIds.includes(planId)) ??
+    usable.find((c) => !c.planIds?.length);
+
   if (!planMatch) {
     return {
       ok: false,
       reason: "wrong_plan",
-      technical: `plan=${planId}; allowed=${active.map((c) => (c.planIds ?? []).join("|") || "*").join(",")}`,
+      technical: `plan=${planId}; allowed=${usable.map((c) => (c.planIds ?? []).join("|") || "*").join(",")}`,
     };
   }
 

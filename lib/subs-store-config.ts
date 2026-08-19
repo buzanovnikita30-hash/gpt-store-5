@@ -232,28 +232,21 @@ function finalizeSpotifyStorePlans(plans: SpotifyPlan[], discounts: LandingDisco
 }
 
 function mapPromocodeRows(rows: PromocodeRow[]): PromoCode[] {
-  const now = Date.now();
   return rows
-    .filter((r) => r.is_active !== false)
-    .filter((r) => {
-      if (!r.expires_at) return true;
-      const e = new Date(r.expires_at).getTime();
-      return !Number.isNaN(e) && e >= now;
+    .map((r) => {
+      const maxUses = r.max_uses ?? null;
+      const usesCount = Number(r.used_count ?? 0);
+      return {
+        code: String(r.code).trim().toUpperCase(),
+        type: (r.type === "fixed" ? "fixed" : "percent") as PromoCode["type"],
+        value: Math.round(Number(r.value) || 0),
+        active: r.is_active !== false,
+        planIds: r.tariff_slugs?.length ? r.tariff_slugs : undefined,
+        dbId: r.id,
+        maxUses,
+        usesCount,
+      };
     })
-    .filter((r) => {
-      if (r.max_uses == null) return true;
-      return Number(r.used_count ?? 0) < r.max_uses;
-    })
-    .map((r) => ({
-      code: String(r.code).trim().toUpperCase(),
-      type: (r.type === "fixed" ? "fixed" : "percent") as PromoCode["type"],
-      value: Math.round(Number(r.value) || 0),
-      active: true,
-      planIds: r.tariff_slugs?.length ? r.tariff_slugs : undefined,
-      dbId: r.id,
-      maxUses: r.max_uses ?? null,
-      usesCount: Number(r.used_count ?? 0),
-    }))
     .filter((p) => p.code && p.value > 0);
 }
 

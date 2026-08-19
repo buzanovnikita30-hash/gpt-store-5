@@ -1,4 +1,5 @@
 import type { AuthSiteSlug } from "@/lib/auth/detectAuthSite";
+import { withPromoQuery } from "@/lib/checkout/promo-capture";
 
 export type CheckoutIntent = {
   siteSlug: AuthSiteSlug;
@@ -17,9 +18,13 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
-export function buildCheckoutPath(siteSlug: AuthSiteSlug, planId: string): string {
+export function buildCheckoutPath(
+  siteSlug: AuthSiteSlug,
+  planId: string,
+  promoCode?: string | null,
+): string {
   const base = siteSlug === "subs-store" ? "/checkout/spotify" : "/checkout";
-  return `${base}?plan=${encodeURIComponent(planId)}`;
+  return withPromoQuery(`${base}?plan=${encodeURIComponent(planId)}`, promoCode);
 }
 
 export function isCheckoutReturnPath(path: string | null | undefined): boolean {

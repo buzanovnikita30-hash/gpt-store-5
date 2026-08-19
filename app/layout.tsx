@@ -11,6 +11,7 @@ import { GptStoreYandexMetrikaHead } from "@/components/analytics/GptStoreYandex
 import { SubsStoreYandexMetrikaHead } from "@/components/analytics/SubsStoreYandexMetrikaHead";
 import { SubsStoreYandexMetrika } from "@/components/analytics/SubsStoreYandexMetrika";
 import { YandexMetrika } from "@/components/analytics/YandexMetrika";
+import { PromoCapture } from "@/components/checkout/PromoCapture";
 import { ReferralCapture } from "@/components/referrals/ReferralCapture";
 import "./globals.css";
 
@@ -112,6 +113,7 @@ export default function RootLayout({
         <div className="relative" style={{ zIndex: 1 }}>
           <Suspense fallback={null}>
             <ReferralCapture />
+            <PromoCapture />
           </Suspense>
           {children}
         </div>

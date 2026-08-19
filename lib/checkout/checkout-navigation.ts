@@ -67,7 +67,7 @@ export async function goToCheckoutEmailStep(params: {
   persistCheckoutIntent({ siteSlug, planId, planName, promoCode });
   await navigateToCheckoutPath({
     siteSlug,
-    path: buildCheckoutPath(siteSlug, planId),
+    path: buildCheckoutPath(siteSlug, planId, promoCode),
     router,
   });
 }

@@ -110,9 +110,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Тариф не найден" }, { status: 404 });
       }
 
-      const promoAllowed = plan.allowPromocodes !== false;
       let promo: import("@/lib/store-config").PromoCode | null = null;
-      if (promoCode?.trim() && promoAllowed) {
+      if (promoCode?.trim()) {
         const { resolvePromoForPlan, promoUserMessage } = await import(
           "@/lib/promocodes/promo-resolve"
         );
@@ -125,11 +124,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: promoUserMessage(resolved.reason) }, { status: 400 });
         }
         promo = resolved.promo;
-      } else if (promoCode?.trim() && !promoAllowed) {
-        return NextResponse.json(
-          { error: "Промокод не подходит к выбранному тарифу" },
-          { status: 400 },
-        );
       }
 
       const priced = applyPromo(plan.price, promo);

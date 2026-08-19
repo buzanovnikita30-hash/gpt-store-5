@@ -2,6 +2,7 @@ import { CHATGPT_PLANS, GPT_PUBLIC_HIDDEN_PLAN_IDS, type ExtendedPlan } from "@/
 import { applyHeroPromoDisplayToGptPlans } from "@/lib/landing/hero-promo-landing-discount";
 import type { LandingDiscount } from "@/lib/pricing-helpers";
 import { applyLandingDiscount, pickLandingDiscount } from "@/lib/pricing-helpers";
+import { applyPromo as applyPromoAmount } from "@/lib/promocodes/apply-promo";
 import { fetchPromoCodesFromDb } from "@/lib/promocodes/db-promo";
 import { resolvePromoForPlan } from "@/lib/promocodes/promo-resolve";
 import { tryCreateAdminClient } from "@/lib/supabase/server";
@@ -307,13 +308,7 @@ export function findPromo(codes: PromoCode[], code: string | null | undefined, p
 }
 
 export function applyPromo(price: number, promo: PromoCode | null) {
-  if (!promo) return { finalPrice: price, discountValue: 0 };
-  const rawDiscount =
-    promo.type === "percent"
-      ? Math.round((price * promo.value) / 100)
-      : Math.round(promo.value);
-  const discountValue = Math.max(0, Math.min(price, rawDiscount));
-  return { finalPrice: Math.max(0, price - discountValue), discountValue };
+  return applyPromoAmount(price, promo);
 }
 
 export { applyLandingDiscount, pickLandingDiscount } from "@/lib/pricing-helpers";
