@@ -10,13 +10,19 @@ interface Props {
 
 type EditablePlan = {
   id: string;
-  productId: "chatgpt-plus" | "chatgpt-pro";
+  productId: "chatgpt-plus" | "chatgpt-pro" | "chatgpt-go";
   name: string;
   price: number;
   period: string;
   isPopular: boolean;
   currency: string;
 };
+
+function normalizeProductId(value: unknown): EditablePlan["productId"] {
+  if (value === "chatgpt-pro") return "chatgpt-pro";
+  if (value === "chatgpt-go") return "chatgpt-go";
+  return "chatgpt-plus";
+}
 
 function toEditable(plan: ExtendedPlan): EditablePlan {
   return {
@@ -41,7 +47,7 @@ function normalizeAdminPlans(rawPlans: unknown, fallbackPlans: EditablePlan[]): 
           const fallback = fallbackPlans.find((x) => x.id === id) ?? fallbackPlans[0];
           return {
             id,
-            productId: p.productId === "chatgpt-pro" ? "chatgpt-pro" : "chatgpt-plus",
+            productId: normalizeProductId(p.productId),
             name: typeof p.name === "string" ? p.name : fallback?.name ?? id,
             price: typeof p.price === "number" ? p.price : Number(p.price ?? fallback?.price ?? 0),
             period: typeof p.period === "string" ? p.period : fallback?.period ?? "мес",
@@ -60,12 +66,18 @@ function normalizeAdminPlans(rawPlans: unknown, fallbackPlans: EditablePlan[]): 
 
   const proFallback = fallbackPlans.filter((p) => p.productId === "chatgpt-pro");
   const proById = new Map(parsedRaw.filter((p) => p.productId === "chatgpt-pro").map((p) => [p.id, p]));
-  return [...normalizedPlus, ...proFallback.map((p) => proById.get(p.id) ?? p)];
+  const goFallback = fallbackPlans.filter((p) => p.productId === "chatgpt-go");
+  const goById = new Map(parsedRaw.filter((p) => p.productId === "chatgpt-go").map((p) => [p.id, p]));
+  return [
+    ...normalizedPlus,
+    ...proFallback.map((p) => proById.get(p.id) ?? p),
+    ...goFallback.map((p) => goById.get(p.id) ?? p),
+  ];
 }
 
 export function GptTariffsManager({ initialSettings }: Props) {
   const fallbackPlans = useMemo(
-    () => [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro].map(toEditable),
+    () => [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go].map(toEditable),
     [],
   );
   const initialPlans = useMemo(
@@ -87,7 +99,9 @@ export function GptTariffsManager({ initialSettings }: Props) {
     setError(null);
     try {
       const fullPlans = pricingPlans.map((plan) => {
-        const canonical = [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro].find((p) => p.id === plan.id);
+        const canonical = [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go].find(
+          (p) => p.id === plan.id,
+        );
         return {
           ...(canonical ?? CHATGPT_PLANS.plus[0]),
           ...plan,
@@ -132,13 +146,14 @@ export function GptTariffsManager({ initialSettings }: Props) {
                   value={plan.productId}
                   onChange={(e) =>
                     updatePlan(plan.id, {
-                      productId: e.target.value === "chatgpt-pro" ? "chatgpt-pro" : "chatgpt-plus",
+                      productId: normalizeProductId(e.target.value),
                     })
                   }
                   className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm"
                 >
                   <option value="chatgpt-plus">ChatGPT Plus</option>
                   <option value="chatgpt-pro">ChatGPT Pro</option>
+                  <option value="chatgpt-go">ChatGPT Go</option>
                 </select>
               </div>
               <div>

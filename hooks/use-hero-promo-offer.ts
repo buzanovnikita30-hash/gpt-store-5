@@ -9,7 +9,7 @@ import {
   resolveSpotifyHeroPromoOffer,
   type HeroPromoOffer,
 } from "@/lib/landing/resolve-hero-promo-offer";
-import { PLUS_PLANS_NEW } from "@/lib/chatgpt-data";
+import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
 import { SPOTIFY_PLANS } from "@/lib/content/spotify";
 import type { LandingDiscount } from "@/lib/pricing-helpers";
 
@@ -51,13 +51,15 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
   );
   const [promoActive, setPromoActive] = useState(() => isPromoWindowActive(config.window));
   const [gptPlans, setGptPlans] = useState<GptPlanRow[]>(() =>
-    PLUS_PLANS_NEW.map((p) => ({
+    mergeGptStorefrontPlans().map((p) => ({
       id: p.id,
       name: p.name,
       price: p.price,
       currency: p.currency,
       period: p.period,
       productId: p.productId,
+      original_price: (p as GptPlanRow).original_price,
+      landing_discount_name: (p as GptPlanRow).landing_discount_name,
     })),
   );
   const [spotifyPlans, setSpotifyPlans] = useState<SpotifyPlanRow[]>(() =>
@@ -99,23 +101,18 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
         if (cancelled) return;
         if (site === "gpt") {
           const fromApi = (json.plans as GptPlanRow[]) ?? [];
-          // Featured plan must stay available even if admin hide/filter drops it from store-config.
-          const byId = new Map<string, GptPlanRow>();
-          for (const p of PLUS_PLANS_NEW) {
-            if (p.inStock === false) continue;
-            byId.set(p.id, {
+          setGptPlans(
+            mergeGptStorefrontPlans(fromApi as Parameters<typeof mergeGptStorefrontPlans>[0]).map((p) => ({
               id: p.id,
               name: p.name,
               price: p.price,
               currency: p.currency,
               period: p.period,
               productId: p.productId,
-            });
-          }
-          for (const p of fromApi) {
-            if (p.id) byId.set(p.id, { ...byId.get(p.id), ...p });
-          }
-          setGptPlans([...byId.values()]);
+              original_price: (p as GptPlanRow).original_price,
+              landing_discount_name: (p as GptPlanRow).landing_discount_name,
+            })),
+          );
         } else {
           setSpotifyPlans((json.plans as SpotifyPlanRow[]) ?? []);
         }

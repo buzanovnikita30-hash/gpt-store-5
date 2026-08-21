@@ -1,7 +1,7 @@
 import { CHATGPT_PLANS } from "@/lib/chatgpt-data";
 
 const PLAN_NAME_BY_ID = new Map(
-  [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro].map((p) => [p.id, p.name]),
+  [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go].map((p) => [p.id, p.name]),
 );
 
 /** Подпись тарифа для админки (колонка orders.plan_name в БД может отсутствовать). */
@@ -15,6 +15,7 @@ export function resolveGptOrderPlanLabel(order: {
   const product = (order.product ?? "").toLowerCase();
   if (product === "chatgpt-plus") return "ChatGPT Plus";
   if (product === "chatgpt-pro") return "ChatGPT Pro";
+  if (product === "chatgpt-go") return "ChatGPT Go";
 
   const id = order.plan_id.toLowerCase();
   if (id.includes("plus")) return "ChatGPT Plus";

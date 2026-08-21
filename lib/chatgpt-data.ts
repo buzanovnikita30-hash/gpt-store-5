@@ -312,6 +312,31 @@ export const PLUS_PLANS_NEW: ExtendedPlan[] = [
   },
 ];
 
+export const GO_PLANS: ExtendedPlan[] = [
+  {
+    id: "go-1m",
+    productId: "chatgpt-go",
+    name: "GO",
+    price: 1190,
+    currency: "₽",
+    period: "мес",
+    badge: "Доступная цена",
+    description:
+      "ChatGPT Go на 1 месяц — больше возможностей, чем в бесплатной версии, по доступной цене. Подходит, если Plus не нужен.",
+    features: [
+      "Больше сообщений, чем на бесплатном тарифе",
+      "Создание изображений",
+      "Загрузка и анализ файлов",
+      "Расширенный доступ к возможностям ChatGPT",
+      "Для работы, учёбы и повседневных задач",
+      "Поддержка 24/7",
+      "Гарантия на весь срок",
+    ],
+    isPopular: false,
+    cta: "Подключить за 1 190 ₽",
+  },
+];
+
 export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Нужна ли иностранная карта?",
@@ -366,7 +391,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Чем отличаются тарифы Plus?",
     answer:
-      "«Популярный» — подключение Plus на ваш аккаунт, лучший баланс цены и скорости. «Быстрая активация» — приоритет вне очереди, обычно 5–15 минут после передачи данных.",
+      "«Популярный» — подключение Plus на ваш аккаунт, лучший баланс цены и скорости. «Быстрая активация» — приоритет вне очереди, обычно 5–15 минут после передачи данных. «GO» — отдельный тариф ChatGPT Go: больше возможностей, чем бесплатно, но без функций Plus.",
   },
   {
     question: "Чем отличаются Pro 5x и Pro 20x?",
@@ -388,7 +413,7 @@ export const GUARANTEE_POINTS = [
 
 // ─── Plus / Pro product system ───────────────────────────────────────────────
 
-export type ProductId = "chatgpt-plus" | "chatgpt-pro";
+export type ProductId = "chatgpt-plus" | "chatgpt-pro" | "chatgpt-go";
 
 export interface ExtendedPlan {
   id: string;
@@ -458,6 +483,7 @@ export const PRO_PLANS: ExtendedPlan[] = [
 export const CHATGPT_PLANS = {
   plus: PLUS_PLANS,
   pro: PRO_PLANS,
+  go: GO_PLANS,
 } as const;
 
 export interface ProductInfo {
@@ -481,6 +507,16 @@ export const PRODUCTS: ProductInfo[] = [
     accentColor: "#10a37f",
     glowColor: "rgba(16,163,127,0.15)",
     features: ["ChatGPT 5.5", "DALL·E 3", "Анализ файлов", "Веб-поиск"],
+  },
+  {
+    id: "chatgpt-go",
+    name: "ChatGPT Go",
+    tagline: "Больше, чем бесплатно",
+    description:
+      "ChatGPT Go — оптимальный вариант, если возможностей бесплатной версии уже не хватает, а Plus вам не требуется.",
+    accentColor: "#6366f1",
+    glowColor: "rgba(99,102,241,0.15)",
+    features: ["Больше сообщений", "Изображения", "Анализ файлов", "Работа и учёба"],
   },
   {
     id: "chatgpt-pro",

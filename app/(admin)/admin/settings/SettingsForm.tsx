@@ -10,7 +10,7 @@ interface Props {
 
 type EditablePlan = {
   id: string;
-  productId: "chatgpt-plus" | "chatgpt-pro";
+  productId: "chatgpt-plus" | "chatgpt-pro" | "chatgpt-go";
   name: string;
   price: number;
   period: string;
@@ -21,6 +21,12 @@ type EditablePlan = {
   cta: string;
   currency: string;
 };
+
+function normalizeProductId(value: unknown): EditablePlan["productId"] {
+  if (value === "chatgpt-pro") return "chatgpt-pro";
+  if (value === "chatgpt-go") return "chatgpt-go";
+  return "chatgpt-plus";
+}
 
 function toEditable(plan: ExtendedPlan): EditablePlan {
   return {
@@ -40,7 +46,7 @@ function normalizeAdminPlans(rawPlans: unknown, fallbackPlans: EditablePlan[]): 
           const fallback = fallbackPlans.find((x) => x.id === id) ?? fallbackPlans[0];
           return {
             id,
-            productId: p.productId === "chatgpt-pro" ? "chatgpt-pro" : "chatgpt-plus",
+            productId: normalizeProductId(p.productId),
             name: typeof p.name === "string" ? p.name : fallback?.name ?? id,
             price: typeof p.price === "number" ? p.price : Number(p.price ?? fallback?.price ?? 0),
             period: typeof p.period === "string" ? p.period : fallback?.period ?? "мес",
@@ -70,7 +76,11 @@ function normalizeAdminPlans(rawPlans: unknown, fallbackPlans: EditablePlan[]): 
   const proById = new Map(parsedRaw.filter((p) => p.productId === "chatgpt-pro").map((p) => [p.id, p]));
   const normalizedPro = proFallback.map((p) => proById.get(p.id) ?? p);
 
-  return [...normalizedPlus, ...normalizedPro];
+  const goFallback = fallbackPlans.filter((p) => p.productId === "chatgpt-go");
+  const goById = new Map(parsedRaw.filter((p) => p.productId === "chatgpt-go").map((p) => [p.id, p]));
+  const normalizedGo = goFallback.map((p) => goById.get(p.id) ?? p);
+
+  return [...normalizedPlus, ...normalizedPro, ...normalizedGo];
 }
 
 const FIELDS = [
@@ -82,7 +92,7 @@ const FIELDS = [
 
 export function SettingsForm({ initialSettings }: Props) {
   const fallbackPlans = useMemo<EditablePlan[]>(
-    () => [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro].map(toEditable),
+    () => [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go].map(toEditable),
     []
   );
 
@@ -265,13 +275,14 @@ export function SettingsForm({ initialSettings }: Props) {
                     value={plan.productId}
                     onChange={(e) =>
                       updatePlan(plan.id, {
-                        productId: e.target.value === "chatgpt-pro" ? "chatgpt-pro" : "chatgpt-plus",
+                        productId: normalizeProductId(e.target.value),
                       })
                     }
                     className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm outline-none focus:border-[#10a37f]"
                   >
                     <option value="chatgpt-plus">ChatGPT Plus</option>
                     <option value="chatgpt-pro">ChatGPT Pro</option>
+                    <option value="chatgpt-go">ChatGPT Go</option>
                   </select>
                 </div>
                 <div>

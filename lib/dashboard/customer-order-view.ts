@@ -73,6 +73,7 @@ export function getCustomerOrderProductLabel(order: CustomerOrderView): string {
   }
   if (order.product === "chatgpt-plus") return "ChatGPT Plus";
   if (order.product === "chatgpt-pro") return "ChatGPT Pro";
+  if (order.product === "chatgpt-go") return "ChatGPT Go";
   return `${order.product} — ${order.plan_id}`;
 }
 

@@ -31,7 +31,9 @@ export function OrderReceiptCard({
       ? "ChatGPT Plus"
       : product === "chatgpt-pro"
         ? "ChatGPT Pro"
-        : `${product} · ${planId}`;
+        : product === "chatgpt-go"
+          ? "ChatGPT Go"
+          : `${product} · ${planId}`;
 
   const activatedDate = new Date(activatedAt).toLocaleDateString("ru", {
     day: "numeric",

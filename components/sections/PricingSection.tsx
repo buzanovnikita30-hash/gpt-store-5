@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { PLUS_PLANS, PRO_PLANS, PRODUCTS, PLUS_READY_CHECKOUT_WARNING, type ProductId } from "@/lib/chatgpt-data";
+import { GO_PLANS, PLUS_PLANS, PRO_PLANS, PRODUCTS, PLUS_READY_CHECKOUT_WARNING, type ProductId } from "@/lib/chatgpt-data";
+import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
 import { fadeUp } from "@/lib/motion-config";
 import {
   GPT_TARIFF_GUIDE_ITEMS,
@@ -76,6 +77,11 @@ const PLAN_HOVER_DETAILS: Record<string, string[]> = {
     "Для тех, кому важно подключиться как можно быстрее.",
     "Те же функции Plus, но с ускоренной очередью.",
   ],
+  "go-1m": [
+    "ChatGPT Go — больше сообщений, изображений и файлов, чем в бесплатной версии.",
+    "Подходит для работы, учёбы и повседневных задач без переплаты за Plus.",
+    "Оптимальный выбор, если бесплатного тарифа уже не хватает.",
+  ],
   "pro-5x": [
     "Одинаковые функции с Pro 20x, отличие только в объеме лимитов.",
     "Около 5x лимитов относительно Plus для активной ежедневной работы.",
@@ -96,10 +102,10 @@ export function PricingSection({
 }) {
   const [activeProduct, setActiveProduct] = useState<ProductId>("chatgpt-plus");
   const [hoveredPlanId, setHoveredPlanId] = useState<string | null>(null);
-  const [runtimePlans, setRuntimePlans] = useState<RuntimePlan[]>(
-    initialPlans && initialPlans.length ? initialPlans : [...PLUS_PLANS, ...PRO_PLANS]
+  const [runtimePlans, setRuntimePlans] = useState<RuntimePlan[]>(() =>
+    mergeGptStorefrontPlans(initialPlans),
   );
-  const lastPlansHashRef = useRef(JSON.stringify(runtimePlans));
+  const lastPlansHashRef = useRef(JSON.stringify(mergeGptStorefrontPlans(initialPlans)));
   const hasInitialPlans = Boolean(initialPlans && initialPlans.length);
 
   useEffect(() => {
@@ -124,14 +130,17 @@ export function PricingSection({
 
         const nextPlans = (json.plans ?? []).filter(
           (p): p is RuntimePlan =>
-            Boolean(p?.id) && (p.productId === "chatgpt-plus" || p.productId === "chatgpt-pro")
+            Boolean(p?.id) &&
+            (p.productId === "chatgpt-plus" ||
+              p.productId === "chatgpt-pro" ||
+              p.productId === "chatgpt-go")
         );
         if (!nextPlans.length) return;
 
         const nextHash = JSON.stringify(nextPlans);
         if (!cancelled && nextHash !== lastPlansHashRef.current) {
           lastPlansHashRef.current = nextHash;
-          setRuntimePlans(nextPlans);
+          setRuntimePlans(mergeGptStorefrontPlans(nextPlans));
         }
       } catch {
         // Тихий фолбэк: оставляем текущие цены, если API временно недоступен.
@@ -199,10 +208,10 @@ export function PricingSection({
             Тарифы
           </span>
           <h2 className="font-heading text-3xl font-bold text-gray-900 md:text-4xl">
-            Выберите формат подключения — от Plus до Pro
+            Выберите формат подключения — от Go до Pro
           </h2>
           <p className="max-w-2xl text-lg text-gray-500">
-            Plus — для ежедневной работы. Pro — для максимальных лимитов. Оплата в рублях, гарантия на весь срок.
+            Go — доступнее бесплатной версии. Plus — для ежедневной работы. Pro — для максимальных лимитов.
           </p>
         </motion.div>
 
@@ -460,7 +469,9 @@ export function PricingSection({
             className={
               isProDualCompare || isPlusDualCompare
                 ? "mx-auto grid w-full max-w-5xl auto-rows-fr grid-cols-1 items-stretch gap-6 md:grid-cols-2"
-                : "grid auto-rows-fr grid-cols-1 items-stretch gap-6 md:grid-cols-3"
+                : activeProduct === "chatgpt-go"
+                  ? "mx-auto grid w-full max-w-md auto-rows-fr grid-cols-1 items-stretch gap-6"
+                  : "grid auto-rows-fr grid-cols-1 items-stretch gap-6 md:grid-cols-3"
             }
           >
             {plans.map((plan, index) => {
@@ -487,6 +498,7 @@ export function PricingSection({
                           ? "new"
                           : null
                   : null;
+              const goTier = plan.productId === "chatgpt-go" ? "go" : null;
 
               const proCardShell =
                 proTier === "5x"
@@ -504,7 +516,11 @@ export function PricingSection({
                       : plusTier === "new"
                         ? "border border-slate-200/95 bg-slate-50/30 ring-1 ring-slate-100/90"
                         : "";
-              const tierShell = proCardShell || plusCardShell;
+              const goCardShell =
+                goTier === "go"
+                  ? "border-2 border-indigo-400/80 ring-1 ring-indigo-200/50 shadow-md shadow-indigo-500/10"
+                  : "";
+              const tierShell = proCardShell || plusCardShell || goCardShell;
 
               const proGlow =
                 proTier === "5x"
@@ -522,6 +538,7 @@ export function PricingSection({
                       : plusTier === "new"
                         ? "rgba(71, 85, 105, 0.14)"
                         : product.glowColor;
+              const goGlow = goTier === "go" ? "rgba(99, 102, 241, 0.16)" : product.glowColor;
 
               const proAccent = proTier === "5x" ? "#0284c7" : proTier === "20x" ? "#059669" : product.accentColor;
               const plusAccent =
@@ -534,9 +551,10 @@ export function PricingSection({
                       : plusTier === "new"
                         ? "#475569"
                         : product.accentColor;
+              const goAccent = goTier === "go" ? "#6366f1" : product.accentColor;
 
-              const cardAccent = proTier ? proAccent : plusTier ? plusAccent : product.accentColor;
-              const cardGlow = proTier ? proGlow : plusTier ? plusGlow : product.glowColor;
+              const cardAccent = proTier ? proAccent : plusTier ? plusAccent : goTier ? goAccent : product.accentColor;
+              const cardGlow = proTier ? proGlow : plusTier ? plusGlow : goTier ? goGlow : product.glowColor;
 
               const isHovered = hoveredPlanId === plan.id;
               const hoverDetails =

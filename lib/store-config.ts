@@ -1,5 +1,5 @@
 import { CHATGPT_PLANS, GPT_PUBLIC_HIDDEN_PLAN_IDS, type ExtendedPlan } from "@/lib/chatgpt-data";
-import { applyHeroPromoDisplayToGptPlans } from "@/lib/landing/hero-promo-landing-discount";
+import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
 import type { LandingDiscount } from "@/lib/pricing-helpers";
 import { applyLandingDiscount, pickLandingDiscount } from "@/lib/pricing-helpers";
 import { applyPromo as applyPromoAmount } from "@/lib/promocodes/apply-promo";
@@ -36,7 +36,11 @@ export type StoreConfig = {
   landingDiscounts: LandingDiscount[];
 };
 
-const DEFAULT_PLANS: ExtendedPlan[] = [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro];
+const DEFAULT_PLANS: ExtendedPlan[] = [
+  ...CHATGPT_PLANS.plus,
+  ...CHATGPT_PLANS.pro,
+  ...CHATGPT_PLANS.go,
+];
 const DEFAULT_SECTIONS: LandingSectionsConfig = {
   showReviews: true,
   showFaq: true,
@@ -123,7 +127,12 @@ function normalizePlans(input: unknown, availability: PlanAvailabilityConfig): E
     if (DEFAULT_PLANS.some((p) => p.id === id)) continue;
     const fallback: ExtendedPlan = {
       id,
-      productId: raw.productId === "chatgpt-pro" ? "chatgpt-pro" : "chatgpt-plus",
+      productId:
+        raw.productId === "chatgpt-pro"
+          ? "chatgpt-pro"
+          : raw.productId === "chatgpt-go"
+            ? "chatgpt-go"
+            : "chatgpt-plus",
       name: typeof raw.name === "string" ? raw.name : id,
       price: toNumber(raw.price, 0),
       currency: typeof raw.currency === "string" ? raw.currency : "₽",
@@ -203,7 +212,7 @@ function applyLandingDiscountsToPlans(plans: ExtendedPlan[], discounts: LandingD
 }
 
 function finalizeGptStorePlans(plans: ExtendedPlan[], discounts: LandingDiscount[]): ExtendedPlan[] {
-  return applyHeroPromoDisplayToGptPlans(applyLandingDiscountsToPlans(plans, discounts));
+  return mergeGptStorefrontPlans(applyLandingDiscountsToPlans(plans, discounts));
 }
 
 export async function getStoreConfig(): Promise<StoreConfig> {
@@ -299,6 +308,7 @@ export function splitPlans(plans: ExtendedPlan[]) {
   return {
     plus: plans.filter((p) => p.productId === "chatgpt-plus"),
     pro: plans.filter((p) => p.productId === "chatgpt-pro"),
+    go: plans.filter((p) => p.productId === "chatgpt-go"),
   };
 }
 

@@ -47,6 +47,7 @@ function stepIndex(step: OrderTrackerStep): number {
 const ACTIVATION_MINUTES: Record<string, number> = {
   "plus-fast": 5,
   "plus-std": 15,
+  "go-1m": 15,
   "plus-ready": 15,
   "plus-new": 15,
   "pro-5x": 10,

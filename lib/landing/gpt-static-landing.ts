@@ -1,10 +1,14 @@
 import { CHATGPT_PLANS, REVIEWS } from "@/lib/chatgpt-data";
+import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
 import type { PublicReview } from "@/lib/reviews/publicReviews";
 import type { StoreConfig } from "@/lib/store-config";
 
 export const GPT_LANDING_STATIC_CONFIG: StoreConfig = {
-  plans: [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro],
-  promoCodes: [],
+  plans: mergeGptStorefrontPlans([
+    ...CHATGPT_PLANS.plus,
+    ...CHATGPT_PLANS.pro,
+    ...CHATGPT_PLANS.go,
+  ]),  promoCodes: [],
   landingSections: { showReviews: true, showFaq: true, showCompare: true },
   landingDiscounts: [],
 };

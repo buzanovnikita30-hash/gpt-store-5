@@ -178,6 +178,11 @@ export const GPT_TARIFF_GUIDE_ITEMS: TariffGuideItem[] = [
     href: "#pricing",
   },
   {
+    label: "Plus не нужен — хватит больше, чем бесплатно",
+    hint: "«GO» — ChatGPT Go: больше сообщений, изображений и файлов по доступной цене.",
+    href: "#pricing",
+  },
+  {
     label: "Нужны максимальные возможности",
     hint: "Смотрите Pro 5x или Pro 20x — больше лимитов для интенсивной работы.",
     href: "#pricing",

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCryptoPayment } from "@/lib/payments/crypto";
 import { notifyCustomerOrderCreated, notifyNewOrder } from "@/lib/telegram/notifications";
-import { PLUS_PLANS, PRO_PLANS } from "@/lib/chatgpt-data";
+import { GO_PLANS, PLUS_PLANS, PRO_PLANS } from "@/lib/chatgpt-data";
 import { z } from "zod";
 import { applyPromo, getStoreConfig, splitPlans } from "@/lib/store-config";
 
@@ -32,7 +32,11 @@ export async function POST(request: NextRequest) {
   const { planId, accountEmail } = parsed.data;
   const config = await getStoreConfig();
   const split = splitPlans(config.plans);
-  const allPlans = [...(split.plus.length ? split.plus : PLUS_PLANS), ...(split.pro.length ? split.pro : PRO_PLANS)];
+  const allPlans = [
+    ...(split.plus.length ? split.plus : PLUS_PLANS),
+    ...(split.pro.length ? split.pro : PRO_PLANS),
+    ...(split.go.length ? split.go : GO_PLANS),
+  ];
   const plan = allPlans.find((p) => p.id === planId);
   if (!plan || plan.price <= 0) {
     return NextResponse.json({ error: "Plan not found" }, { status: 400 });

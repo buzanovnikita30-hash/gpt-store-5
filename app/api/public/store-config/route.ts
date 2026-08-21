@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const FALLBACK_CONFIG: StoreConfig = {
-  plans: [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro],
+  plans: [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go],
   promoCodes: [],
   landingSections: { showReviews: true, showFaq: true, showCompare: true },
   landingDiscounts: [],
