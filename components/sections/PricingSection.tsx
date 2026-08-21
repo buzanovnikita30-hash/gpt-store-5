@@ -48,6 +48,14 @@ const PRO_MOBILE_COMPARE: Record<string, { text: string; shell: string }> = {
   },
 };
 
+const GO_MOBILE_COMPARE: Record<string, { text: string; shell: string }> = {
+  "go-1m": {
+    text: "GO: больше возможностей, чем бесплатно, без переплаты за Plus — приоритет по цене.",
+    shell:
+      "border-indigo-400/80 bg-gradient-to-br from-indigo-50 via-white to-violet-50/40 text-indigo-950 shadow-indigo-500/12 ring-indigo-200/50",
+  },
+};
+
 function MobileTariffCompareHint({ text, shell }: { text: string; shell: string }) {
   return (
     <div
@@ -184,6 +192,10 @@ export function PricingSection({
     plans.every((p) => p.productId === "chatgpt-plus") &&
     plans.some((p) => p.id === "plus-std") &&
     plans.some((p) => p.id === "plus-fast");
+  const isGoHighlight =
+    activeProduct === "chatgpt-go" &&
+    plans.length >= 1 &&
+    plans.every((p) => p.productId === "chatgpt-go");
 
   return (
     <section id="pricing" className="relative overflow-x-hidden overflow-hidden py-20 md:py-28">
@@ -260,7 +272,7 @@ export function PricingSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
-            className={`mx-auto w-full max-w-5xl ${isProDualCompare || isPlusTripleCompare ? "mb-10" : "mb-12"}`}
+            className={`mx-auto w-full max-w-5xl ${isProDualCompare || isPlusTripleCompare || isGoHighlight ? "mb-10" : "mb-12"}`}
           >
             <div className="flex flex-col items-center justify-center gap-4 text-center sm:flex-row md:gap-8">
               <p className="max-w-xl text-base leading-relaxed text-gray-600 sm:text-left">{product.description}</p>
@@ -458,6 +470,47 @@ export function PricingSection({
           </motion.div>
         )}
 
+        {/* Go — карточка-сравнение перед тарифом */}
+        {isGoHighlight && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.35 }}
+            className="mb-10"
+          >
+            <p className="mb-4 hidden text-center text-xs font-semibold uppercase tracking-[0.2em] text-gray-400 md:block">
+              Между бесплатной версией и Plus — без переплаты
+            </p>
+            <div className="mx-auto hidden w-full max-w-md md:block">
+              <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-indigo-400/75 bg-gradient-to-br from-indigo-50 via-white to-violet-50/35 p-5 shadow-md shadow-indigo-500/10 ring-1 ring-indigo-200/40 md:p-6">
+                <div className="absolute right-2 top-1 text-[4.25rem] font-black leading-none text-indigo-300/95 drop-shadow-[0_2px_10px_rgba(99,102,241,0.22)] select-none md:text-[4.75rem]">
+                  Go
+                </div>
+                <div className="relative flex min-h-[1.375rem] items-center">
+                  <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                    Приоритет по цене
+                  </span>
+                </div>
+                <p className="relative mt-2 text-xs font-bold uppercase tracking-wider text-indigo-700">ChatGPT Go</p>
+                <p className="relative mt-1 font-heading text-xl font-bold text-indigo-950 md:text-2xl">
+                  Больше возможностей без переплаты за Plus
+                </p>
+                <p className="relative mt-2 flex-1 text-sm leading-relaxed text-indigo-950/85">
+                  Если бесплатной версии уже не хватает, а полный Plus не нужен — Go даёт больше сообщений,
+                  изображений и файлов по доступной цене. Оптимальный старт для работы, учёбы и повседневных задач.
+                </p>
+                <div className="relative mt-4 shrink-0 flex h-2.5 overflow-hidden rounded-full bg-indigo-200/60">
+                  <div className="h-full w-[38%] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" title="уровень между Free и Plus" />
+                </div>
+                <p className="relative mt-1.5 shrink-0 text-[11px] font-medium text-indigo-800/90">
+                  Уровень: между Free и Plus · цена: доступная
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Plan cards */}
         <AnimatePresence mode="wait">
           <motion.div
@@ -596,6 +649,11 @@ export function PricingSection({
                     };
                   if (plusTier === "new") return { boxShadow: `0 6px 20px -12px rgba(71, 85, 105, 0.08)` };
                 }
+                if (goTier === "go") {
+                  return {
+                    boxShadow: `0 8px 30px -10px rgba(99, 102, 241, 0.16)`,
+                  };
+                }
                 if (plan.isPopular)
                   return {
                     border: `1.5px solid ${product.accentColor}`,
@@ -609,7 +667,9 @@ export function PricingSection({
                   ? PLUS_MOBILE_COMPARE[plan.id]
                   : isProDualCompare && PRO_MOBILE_COMPARE[plan.id]
                     ? PRO_MOBILE_COMPARE[plan.id]
-                    : null;
+                    : isGoHighlight && GO_MOBILE_COMPARE[plan.id]
+                      ? GO_MOBILE_COMPARE[plan.id]
+                      : null;
 
               return (
               <div key={plan.id} className="flex h-full flex-col">
@@ -679,6 +739,11 @@ export function PricingSection({
                         Вне очереди
                       </span>
                     )}
+                    {goTier === "go" && (
+                      <span className="rounded-md bg-indigo-100 px-2 py-0.5 font-heading text-xs font-bold text-indigo-900 ring-1 ring-indigo-400/70">
+                        Выгоднее Plus
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
                     {plan.price > 0 ? (
@@ -727,7 +792,7 @@ export function PricingSection({
                   ) : null}
                 </div>
 
-                <ul className={`flex-1 space-y-2 ${isProDualCompare || isPlusDualCompare ? "mb-0" : "mb-8"}`}>
+                <ul className={`flex-1 space-y-2 ${isProDualCompare || isPlusDualCompare || isGoHighlight ? "mb-0" : "mb-8"}`}>
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <span
