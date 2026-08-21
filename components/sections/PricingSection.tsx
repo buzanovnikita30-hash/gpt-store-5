@@ -741,7 +741,7 @@ export function PricingSection({
                     )}
                     {goTier === "go" && (
                       <span className="rounded-md bg-indigo-100 px-2 py-0.5 font-heading text-xs font-bold text-indigo-900 ring-1 ring-indigo-400/70">
-                        Выгоднее Plus
+                        Дешевле Plus
                       </span>
                     )}
                   </div>
