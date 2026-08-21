@@ -779,7 +779,14 @@ export function PricingSection({
                                       ? "0 6px 20px -8px rgba(2,132,199,0.45)"
                                       : "0 6px 20px -8px rgba(5,150,105,0.45)",
                                 }
-                              : plusTier === "fast"
+                              : goTier === "go"
+                                ? {
+                                    background: goAccent,
+                                    color: "white",
+                                    border: "1.5px solid transparent",
+                                    boxShadow: "0 6px 20px -8px rgba(99,102,241,0.45)",
+                                  }
+                                : plusTier === "fast"
                                 ? {
                                     background: "#f97316",
                                     color: "white",
