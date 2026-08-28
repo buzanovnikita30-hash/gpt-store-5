@@ -322,7 +322,7 @@ export const GO_PLANS: ExtendedPlan[] = [
     id: "go-1m",
     productId: "chatgpt-go",
     name: "GO",
-    /** Catalog default / fallback. Live base price = site_settings.pricing_plans (Admin → Tariffs). */
+    /** Публичная витрина и checkout всегда показывают эту базу (не stale overlay). */
     price: 1000,
     currency: "₽",
     period: "мес",

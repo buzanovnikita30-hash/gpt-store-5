@@ -23,7 +23,9 @@ import { getPublicSiteOrigin } from "@/lib/app-url";
 
 const APP_URL = getPublicSiteOrigin();
 
-export const dynamic = "force-static";
+/** Не CDN-кэшировать HTML: иначе витрина на секунду показывает старую цену Go. */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "ChatGPT Plus без иностранной карты",

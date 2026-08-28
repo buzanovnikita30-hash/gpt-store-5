@@ -1,9 +1,27 @@
 import {
   CHATGPT_PLANS,
   GPT_PUBLIC_HIDDEN_PLAN_IDS,
+  formatGptPlanCta,
   type ExtendedPlan,
 } from "@/lib/chatgpt-data";
 import { applyHeroPromoDisplayToGptPlans } from "@/lib/landing/hero-promo-landing-discount";
+
+const GPT_GO_PLAN_ID = "go-1m";
+
+function lockGptGoStorefrontPrice(plans: ExtendedPlan[]): ExtendedPlan[] {
+  const go = CHATGPT_PLANS.go.find((plan) => plan.id === GPT_GO_PLAN_ID);
+  if (!go) return plans;
+  return plans.map((plan) => {
+    if (plan.id !== GPT_GO_PLAN_ID) return plan;
+    return {
+      ...plan,
+      price: go.price,
+      cta: formatGptPlanCta(go.price, plan.currency ?? go.currency),
+      original_price: undefined,
+      landing_discount_name: null,
+    } as ExtendedPlan;
+  });
+}
 
 /** Публичный каталог GPT STORE — source of truth для витрины. */
 export function getCanonicalGptStorefrontPlans(): ExtendedPlan[] {
@@ -33,5 +51,5 @@ export function mergeGptStorefrontPlans(overlays?: ExtendedPlan[] | null, now = 
     byId.set(plan.id, base ? { ...base, ...plan } : plan);
   }
 
-  return applyHeroPromoDisplayToGptPlans([...byId.values()], now);
+  return lockGptGoStorefrontPrice(applyHeroPromoDisplayToGptPlans([...byId.values()], now));
 }
