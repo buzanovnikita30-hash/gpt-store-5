@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Loader2, Check } from "lucide-react";
-import { CHATGPT_PLANS, type ExtendedPlan } from "@/lib/chatgpt-data";
+import { CHATGPT_PLANS, formatGptPlanCta, type ExtendedPlan } from "@/lib/chatgpt-data";
 
 interface Props {
   initialSettings: Record<string, unknown>;
@@ -102,10 +102,12 @@ export function GptTariffsManager({ initialSettings }: Props) {
         const canonical = [...CHATGPT_PLANS.plus, ...CHATGPT_PLANS.pro, ...CHATGPT_PLANS.go].find(
           (p) => p.id === plan.id,
         );
+        const price = Math.max(0, Number(plan.price || 0));
         return {
           ...(canonical ?? CHATGPT_PLANS.plus[0]),
           ...plan,
-          price: Math.max(0, Number(plan.price || 0)),
+          price,
+          cta: formatGptPlanCta(price, plan.currency),
         } satisfies ExtendedPlan;
       });
 

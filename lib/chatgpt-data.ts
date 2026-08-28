@@ -57,6 +57,11 @@ export type Plan = {
   cta: string;
 };
 
+/** CTA витрины всегда из актуальной цены — не хранить устаревшую строку отдельно. */
+export function formatGptPlanCta(price: number, currency = "₽"): string {
+  return `Подключить за ${price.toLocaleString("ru")} ${currency}`;
+}
+
 export type FaqItem = {
   question: string;
   answer: string;
@@ -317,7 +322,8 @@ export const GO_PLANS: ExtendedPlan[] = [
     id: "go-1m",
     productId: "chatgpt-go",
     name: "GO",
-    price: 1190,
+    /** Catalog default / fallback. Live base price = site_settings.pricing_plans (Admin → Tariffs). */
+    price: 1000,
     currency: "₽",
     period: "мес",
     badge: "Доступная цена",
@@ -333,7 +339,7 @@ export const GO_PLANS: ExtendedPlan[] = [
       "Гарантия на весь срок",
     ],
     isPopular: false,
-    cta: "Подключить за 1 190 ₽",
+    cta: formatGptPlanCta(1000),
   },
 ];
 

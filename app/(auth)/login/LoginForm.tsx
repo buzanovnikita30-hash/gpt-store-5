@@ -16,20 +16,13 @@ import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types/database";
 
 function detectSite(siteDirect: string, returnUrl: string): "subs-store" | "gpt-store" {
-  if (typeof window !== "undefined") {
-    const port = window.location.port;
-    if (port === "3056") return "gpt-store";
-    if (port === "3055") return "subs-store";
-  }
   if (siteDirect === "gpt-store") return "gpt-store";
   if (siteDirect === "subs-store") return "subs-store";
   if (
     returnUrl.includes("site=subs-store") ||
     returnUrl.includes("/spotify")
   ) {
-    return typeof window !== "undefined" && window.location.port === "3056"
-      ? "gpt-store"
-      : "subs-store";
+    return "subs-store";
   }
   return "gpt-store";
 }
@@ -80,7 +73,62 @@ export function LoginForm() {
         /* ignore */
       }
 
-      const loginRes = await fetch("/api/auth/gpt-login", {
+      try {
+        const loginRes = await fetch("/api/auth/gpt-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: AbortSignal.timeout(20_000),
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password,
+            returnUrl: effectiveReturnUrl,
+          }),
+        });
+
+        const loginBody = (await loginRes.json().catch(() => ({}))) as {
+          error?: string;
+          path?: string;
+          role?: UserRole;
+        };
+
+        if (!loginRes.ok) {
+          setServerError(
+            loginBody.error ??
+              "Не удалось войти в GPT STORE. Попробуйте снова или восстановите пароль.",
+          );
+          return;
+        }
+
+        document.cookie = "current_site=gpt-store; path=/; max-age=2592000; samesite=lax";
+        const role: UserRole =
+          loginBody.role === "admin" || loginBody.role === "operator" || loginBody.role === "client"
+            ? loginBody.role
+            : "client";
+        const target =
+          typeof loginBody.path === "string" && loginBody.path.startsWith("/")
+            ? loginBody.path
+            : resolvePostLoginPath(effectiveReturnUrl, role);
+        if (target.startsWith("/admin") || target.startsWith("/operator")) {
+          window.location.assign(target);
+          return;
+        }
+        router.push(target);
+        router.refresh();
+      } catch {
+        setServerError("Сервер временно недоступен. Повторите попытку через 10-20 секунд.");
+      }
+      return;
+    }
+
+    try {
+      await createClient().auth.signOut({ scope: "local" });
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      const loginRes = await fetch("/api/auth/subs-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -100,69 +148,27 @@ export function LoginForm() {
       if (!loginRes.ok) {
         setServerError(
           loginBody.error ??
-            "Не удалось войти в GPT STORE. Попробуйте снова или восстановите пароль.",
+            "Не удалось войти в Spotify Store. Проверьте email и пароль или восстановите пароль.",
         );
         return;
       }
 
-      document.cookie = "current_site=gpt-store; path=/; max-age=2592000; samesite=lax";
+      document.cookie = "current_site=subs-store; path=/; max-age=2592000; samesite=lax";
+
       const role: UserRole =
         loginBody.role === "admin" || loginBody.role === "operator" || loginBody.role === "client"
           ? loginBody.role
           : "client";
+
       const target =
         typeof loginBody.path === "string" && loginBody.path.startsWith("/")
           ? loginBody.path
           : resolvePostLoginPath(effectiveReturnUrl, role);
       router.push(target);
       router.refresh();
-      return;
-    }
-
-    try {
-      await createClient().auth.signOut({ scope: "local" });
     } catch {
-      /* ignore */
+      setServerError("Сервер временно недоступен. Повторите попытку через 10-20 секунд.");
     }
-
-    const loginRes = await fetch("/api/auth/subs-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        email: normalizedEmail,
-        password,
-        returnUrl: effectiveReturnUrl,
-      }),
-    });
-
-    const loginBody = (await loginRes.json().catch(() => ({}))) as {
-      error?: string;
-      path?: string;
-      role?: UserRole;
-    };
-
-    if (!loginRes.ok) {
-      setServerError(
-        loginBody.error ??
-          "Не удалось войти в Spotify Store. Проверьте email и пароль или восстановите пароль.",
-      );
-      return;
-    }
-
-    document.cookie = "current_site=subs-store; path=/; max-age=2592000; samesite=lax";
-
-    const role: UserRole =
-      loginBody.role === "admin" || loginBody.role === "operator" || loginBody.role === "client"
-        ? loginBody.role
-        : "client";
-
-    const target =
-      typeof loginBody.path === "string" && loginBody.path.startsWith("/")
-        ? loginBody.path
-        : resolvePostLoginPath(effectiveReturnUrl, role);
-    router.push(target);
-    router.refresh();
   }
 
   function onInvalid() {

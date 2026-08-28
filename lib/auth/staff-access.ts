@@ -1,71 +1,78 @@
 import type { User } from "@supabase/supabase-js";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import {
-  isStaffClientCabinetView,
-  staffPanelHomeForRole,
-} from "@/lib/auth/staff-cabinet-access";
-import { resolvePostLoginPath } from "@/lib/auth/postLoginPath";
+import { StaffAuthUnavailableError } from "@/lib/auth/staff-auth-errors";
+import { staffLoginUrl } from "@/lib/auth/staff-auth-redirect";
 import { resolveServerRole } from "@/lib/auth/server-role";
 import { tryCreateClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/database";
 
 export type StaffPanel = "admin" | "operator";
+export {
+  resolveStaffAuthRedirect,
+  staffLoginUrl,
+  staffPanelHome,
+} from "@/lib/auth/staff-auth-redirect";
 
-export function staffPanelHome(role: UserRole): "/admin" | "/operator" | null {
-  return staffPanelHomeForRole(role);
+const STAFF_USER_LOOKUP_MS = 6_000;
+const STAFF_ROLE_LOOKUP_MS = 6_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
-export function staffLoginUrl(returnPath: string): string {
-  const safe =
-    returnPath.startsWith("/") && !returnPath.startsWith("//") ? returnPath : "/admin";
-  return `/login?returnUrl=${encodeURIComponent(safe)}&site=gpt-store`;
-}
-
-/** Куда отправить уже авторизованного staff после /login. */
-export function resolveStaffAuthRedirect(role: UserRole, returnUrl: string | null | undefined): string {
-  const safe =
-    returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//") ? returnUrl : "";
-
-  if (role === "admin") {
-    if (safe.startsWith("/operator")) return "/admin";
-    if (safe.startsWith("/admin")) return safe;
-    if ((safe.startsWith("/dashboard") || safe.startsWith("/cabinet")) && !isStaffClientCabinetView(safe)) {
-      return "/admin";
-    }
-    if (isStaffClientCabinetView(safe)) return safe;
-    return "/admin";
-  }
-
-  if (role === "operator") {
-    if (safe.startsWith("/admin")) return safe.replace(/^\/admin/, "/operator") || "/operator";
-    if (safe.startsWith("/operator")) return safe;
-    if ((safe.startsWith("/dashboard") || safe.startsWith("/cabinet")) && !isStaffClientCabinetView(safe)) {
-      return "/operator";
-    }
-    if (isStaffClientCabinetView(safe)) return safe;
-    return "/operator";
-  }
-
-  if (safe.startsWith("/admin") || safe.startsWith("/operator")) {
-    return "/dashboard?site=gpt-store";
-  }
-
-  return resolvePostLoginPath(safe || "/dashboard?site=gpt-store", role);
-}
-
-export async function getGptStaffSessionUser(): Promise<User | null> {
+/**
+ * Один probe на RSC-запрос: getUser (без лишнего getSession) + роль.
+ * Timeout → StaffAuthUnavailableError (терминальный UI), не «гость».
+ */
+export const loadGptStaffAuth = cache(async (): Promise<{ user: User | null; role: UserRole }> => {
+  let user: User | null;
   try {
     const supabase = await tryCreateClient();
-    if (!supabase) return null;
-    await supabase.auth.getSession();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user;
-  } catch {
-    return null;
+    if (!supabase) {
+      throw new StaffAuthUnavailableError("Supabase client unavailable");
+    }
+    const result = await withTimeout(supabase.auth.getUser(), STAFF_USER_LOOKUP_MS, "staff_user_timeout");
+    user = result.data.user ?? null;
+  } catch (err) {
+    if (err instanceof StaffAuthUnavailableError) throw err;
+    if (err instanceof Error && err.message === "staff_user_timeout") {
+      throw new StaffAuthUnavailableError();
+    }
+    throw new StaffAuthUnavailableError();
   }
+
+  if (!user) {
+    return { user: null, role: "client" };
+  }
+
+  try {
+    const role = await withTimeout(resolveServerRole(user), STAFF_ROLE_LOOKUP_MS, "staff_role_timeout");
+    return { user, role };
+  } catch (err) {
+    if (err instanceof Error && err.message === "staff_role_timeout") {
+      throw new StaffAuthUnavailableError();
+    }
+    throw err;
+  }
+});
+
+export async function getGptStaffSessionUser(): Promise<User | null> {
+  const auth = await loadGptStaffAuth();
+  return auth.user;
 }
 
 /** Guard для /admin и /operator layouts — единая логика роли и login redirect. */
@@ -73,24 +80,24 @@ export async function requireStaffPanel(
   panel: StaffPanel,
   returnPath: string,
 ): Promise<{ user: User; role: StaffPanel }> {
-  const user = await getGptStaffSessionUser();
-  if (!user) {
+  const auth = await loadGptStaffAuth();
+  if (!auth.user) {
     redirect(staffLoginUrl(returnPath));
   }
 
-  const role = await resolveServerRole(user);
+  const role = auth.role;
   if (role === "admin") {
     if (panel === "operator") {
       redirect(returnPath.replace(/^\/operator/, "/admin") || "/admin");
     }
-    return { user, role: "admin" };
+    return { user: auth.user, role: "admin" };
   }
 
   if (role === "operator") {
     if (panel === "admin") {
       redirect(returnPath.replace(/^\/admin/, "/operator") || "/operator");
     }
-    return { user, role: "operator" };
+    return { user: auth.user, role: "operator" };
   }
 
   redirect("/dashboard?site=gpt-store");

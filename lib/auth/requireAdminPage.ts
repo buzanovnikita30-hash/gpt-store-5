@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { resolveServerRole } from "@/lib/auth/server-role";
-import { tryCreateClient } from "@/lib/supabase/server";
+import { loadGptStaffAuth, staffLoginUrl } from "@/lib/auth/staff-access";
 import type { UserRole } from "@/types/database";
 
 /**
@@ -10,20 +9,12 @@ import type { UserRole } from "@/types/database";
 export async function requireAdminPage(): Promise<{
   role: "admin";
 }> {
-  const supabase = await tryCreateClient();
-  if (!supabase) {
-    redirect("/login?returnUrl=%2Fadmin&site=gpt-store&reason=supabase_env_missing");
+  const auth = await loadGptStaffAuth();
+  if (!auth.user) {
+    redirect(staffLoginUrl("/admin"));
   }
-  await supabase.auth.getSession();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login?returnUrl=%2Fadmin&site=gpt-store");
-  }
-  const role: UserRole = await resolveServerRole(user);
+  const role: UserRole = auth.role;
   if (role === "operator") {
-    // Always keep ?site= — bare /operator looks like "home" and breaks StaffSiteUrlSync deep links.
     redirect("/operator?site=gpt-store");
   }
   if (role !== "admin") {

@@ -9,6 +9,8 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { StaffSiteUrlSync } from "@/components/admin/StaffSiteUrlSync";
 import { StaffNotificationsProvider } from "@/components/admin/StaffNotificationsProvider";
 import { StaffNotificationToaster } from "@/components/admin/StaffNotificationToaster";
+import { StaffAuthFailed } from "@/components/admin/StaffAuthFailed";
+import { isStaffAuthUnavailableError } from "@/lib/auth/staff-auth-errors";
 import { requireStaffPanel } from "@/lib/auth/staff-access";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +52,11 @@ export default async function AdminLayout({
   } catch (err) {
     if (isRedirectError(err)) throw err;
     console.error("[admin/layout]", err);
+    if (isStaffAuthUnavailableError(err)) {
+      return (
+        <StaffAuthFailed loginHref="/login?site=gpt-store&returnUrl=%2Fadmin%3Fsite%3Dgpt-store" />
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
         <div className="max-w-md text-center">

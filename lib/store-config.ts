@@ -1,4 +1,4 @@
-import { CHATGPT_PLANS, GPT_PUBLIC_HIDDEN_PLAN_IDS, type ExtendedPlan } from "@/lib/chatgpt-data";
+import { CHATGPT_PLANS, formatGptPlanCta, GPT_PUBLIC_HIDDEN_PLAN_IDS, type ExtendedPlan } from "@/lib/chatgpt-data";
 import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
 import type { LandingDiscount } from "@/lib/pricing-helpers";
 import { applyLandingDiscount, pickLandingDiscount } from "@/lib/pricing-helpers";
@@ -58,6 +58,8 @@ function toNumber(value: unknown, fallback: number): number {
 
 function normalizePlan(input: unknown, fallback: ExtendedPlan): ExtendedPlan {
   const p = (input ?? {}) as Partial<ExtendedPlan>;
+  const price = toNumber(p.price, fallback.price);
+  const currency = p.currency ?? fallback.currency;
   return {
     ...fallback,
     id: p.id ?? fallback.id,
@@ -65,12 +67,12 @@ function normalizePlan(input: unknown, fallback: ExtendedPlan): ExtendedPlan {
     name: p.name ?? fallback.name,
     description: p.description ?? fallback.description,
     period: p.period ?? fallback.period,
-    currency: p.currency ?? fallback.currency,
-    cta: p.cta ?? fallback.cta,
+    currency,
+    cta: formatGptPlanCta(price, currency),
     badge: p.badge ?? fallback.badge,
     isPopular: typeof p.isPopular === "boolean" ? p.isPopular : fallback.isPopular,
     features: Array.isArray(p.features) ? p.features.filter((x): x is string => typeof x === "string") : fallback.features,
-    price: toNumber(p.price, fallback.price),
+    price,
     inStock: typeof p.inStock === "boolean" ? p.inStock : true,
   };
 }

@@ -23,9 +23,9 @@ export async function resolveGptCheckoutPlan(
   const config = await getStoreConfig();
   const split = splitPlans(config.plans);
   const allPlans = [
-    ...(split.plus ?? CHATGPT_PLANS.plus),
-    ...(split.pro ?? CHATGPT_PLANS.pro),
-    ...(split.go ?? CHATGPT_PLANS.go),
+    ...(split.plus.length ? split.plus : CHATGPT_PLANS.plus),
+    ...(split.pro.length ? split.pro : CHATGPT_PLANS.pro),
+    ...(split.go.length ? split.go : CHATGPT_PLANS.go),
   ];
   const plan = allPlans.find((p) => p.id === planId);
 

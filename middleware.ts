@@ -5,8 +5,9 @@ import {
   buildSpotifyLinkPreviewHtml,
   isLinkPreviewBot,
 } from "@/lib/brand/spotify-link-preview-html";
+import { requestHasSupabaseAuthCookie } from "@/lib/auth/has-supabase-auth-cookie";
 import { resolveStaffAwayFromClientCabinet } from "@/lib/auth/staff-cabinet-access";
-import { resolveStaffAuthRedirect } from "@/lib/auth/staff-access";
+import { resolveStaffAuthRedirect } from "@/lib/auth/staff-auth-redirect";
 import { resolveServerRole } from "@/lib/auth/server-role";
 import {
   isSiteUiLoggedOut,
@@ -28,10 +29,24 @@ import {
 import { resolvePostLoginPath } from "@/lib/auth/postLoginPath";
 import { isSpotifyStoreHostname } from "@/lib/site-url";
 
+function normalizeHost(raw: string | null | undefined): string {
+  const value = (raw ?? "").split(",")[0]?.trim() ?? "";
+  if (!value) return "";
+  return value.toLowerCase().split(":")[0];
+}
+
+function resolveRequestHost(request: NextRequest): string {
+  return (
+    normalizeHost(request.headers.get("x-forwarded-host")) ||
+    normalizeHost(request.headers.get("host")) ||
+    request.nextUrl.hostname.toLowerCase()
+  );
+}
+
 function resolveBrandIconBase(request: NextRequest): string {
   const port = request.nextUrl.port || null;
   if (isSubsDevPort(port)) return "/icons/spotify";
-  if (isSpotifyStoreHostname(request.nextUrl.hostname)) return "/icons/spotify";
+  if (isSpotifyStoreHostname(resolveRequestHost(request))) return "/icons/spotify";
   return "/icons/gpt";
 }
 
@@ -74,24 +89,46 @@ function pathNeedsSessionLookup(path: string): boolean {
   );
 }
 
+type UserLookup = { user: User | null; timedOut: boolean };
+
 async function getUserWithTimeout(
   sb: ReturnType<typeof createServerClient> | null,
   ms: number,
-): Promise<User | null> {
-  if (!sb) return null;
+): Promise<UserLookup> {
+  if (!sb) return { user: null, timedOut: false };
   try {
-    const result = await Promise.race([
-      sb.auth.getUser(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+    return await Promise.race([
+      sb.auth.getUser().then((result: { data?: { user?: User | null } }) => ({
+        user: result.data?.user ?? null,
+        timedOut: false,
+      })),
+      new Promise<UserLookup>((resolve) =>
+        setTimeout(() => resolve({ user: null, timedOut: true }), ms),
+      ),
     ]);
-    if (!result) return null;
-    return result.data?.user ?? null;
   } catch {
-    return null;
+    return { user: null, timedOut: false };
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 const AUTH_LOOKUP_MS = 2000;
+const MIDDLEWARE_ROLE_MS = 2500;
 
 /** Supabase SSR: refreshed auth cookies must survive NextResponse.redirect. */
 function redirectPreservingCookies(target: URL, source: NextResponse): NextResponse {
@@ -113,10 +150,16 @@ function applyCurrentSiteCookie(
   response: NextResponse,
   path: string,
   siteQuery: string | null,
+  requestHost: string,
   request: NextRequest,
   cookieSiteEarly: SiteSlug | undefined,
   devPort: string | null,
 ): void {
+  if (isSpotifyStoreHostname(requestHost)) {
+    response.cookies.set("current_site", "subs-store", CURRENT_SITE_COOKIE);
+    return;
+  }
+
   if (
     (path.startsWith("/dashboard") || path.startsWith("/cabinet")) &&
     (siteQuery === "subs-store" || siteQuery === "gpt-store")
@@ -150,8 +193,9 @@ function applyCurrentSiteCookie(
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const host = request.nextUrl.hostname.toLowerCase();
+  const host = resolveRequestHost(request);
   const protocol = request.nextUrl.protocol;
+  const siteQuery = request.nextUrl.searchParams.get("site");
 
   const brandIconResponse = maybeRewriteBrandIcon(request);
   if (brandIconResponse) return brandIconResponse;
@@ -165,6 +209,22 @@ export async function middleware(request: NextRequest) {
       const url = new URL(request.nextUrl.pathname + request.nextUrl.search, `${protocol}//spotify-store.ru`);
       return NextResponse.redirect(url, 308);
     }
+  }
+
+  const needsSubsSiteQuery =
+    isSpotifyStoreHostname(host) &&
+    process.env.NODE_ENV === "production" &&
+    (path.startsWith("/admin") ||
+      path.startsWith("/operator") ||
+      path.startsWith("/dashboard") ||
+      path.startsWith("/cabinet") ||
+      path.startsWith("/login") ||
+      path.startsWith("/register")) &&
+    siteQuery !== "subs-store";
+  if (needsSubsSiteQuery) {
+    const url = request.nextUrl.clone();
+    url.searchParams.set("site", "subs-store");
+    return NextResponse.redirect(url, 307);
   }
 
   if (path === "/spotify" || path === "/spotify/") {
@@ -188,7 +248,6 @@ export async function middleware(request: NextRequest) {
   } else if (isSubsDevPort(devPort)) {
     requestHeaders.set("x-dev-store-profile", "subs-store");
   }
-  const siteQuery = request.nextUrl.searchParams.get("site");
   if (siteQuery === "subs-store" || siteQuery === "gpt-store") {
     requestHeaders.set("x-site-slug", siteQuery);
   }
@@ -209,8 +268,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/spotify", request.url));
   }
 
-  const hostname = request.nextUrl.hostname;
-  if (process.env.NODE_ENV === "production" && isSpotifyStoreHostname(hostname)) {
+  if (process.env.NODE_ENV === "production" && isSpotifyStoreHostname(host)) {
     if (path === "/" || isGptLandingAlias) {
       return NextResponse.redirect(new URL("/spotify", request.url));
     }
@@ -223,7 +281,7 @@ export async function middleware(request: NextRequest) {
     cookieSiteEarlyRaw === "subs-store" || cookieSiteEarlyRaw === "gpt-store" ? cookieSiteEarlyRaw : undefined;
 
   if (!pathNeedsSessionLookup(path)) {
-    applyCurrentSiteCookie(supabaseResponse, path, siteQuery, request, cookieSiteEarly, devPort);
+    applyCurrentSiteCookie(supabaseResponse, path, siteQuery, host, request, cookieSiteEarly, devPort);
     return supabaseResponse;
   }
 
@@ -269,10 +327,14 @@ export async function middleware(request: NextRequest) {
       path.startsWith("/cabinet") ||
       cookieSiteEarly === "subs-store");
 
-  const [gptUser, subsUser] = await Promise.all([
+  const [gptLookup, subsLookup] = await Promise.all([
     getUserWithTimeout(gptSb, AUTH_LOOKUP_MS),
-    needsSubsAuth ? getUserWithTimeout(subsSb, AUTH_LOOKUP_MS) : Promise.resolve(null),
+    needsSubsAuth
+      ? getUserWithTimeout(subsSb, AUTH_LOOKUP_MS)
+      : Promise.resolve({ user: null, timedOut: false } satisfies { user: null; timedOut: boolean }),
   ]);
+  const gptUser = gptLookup.user;
+  const subsUser = subsLookup.user;
 
   const protectedPaths = ["/dashboard", "/cabinet", "/admin", "/operator"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
@@ -293,9 +355,15 @@ export async function middleware(request: NextRequest) {
       !isSiteUiLoggedOut("subs-store", incoming.cookies)
   : Boolean(gptUser) && !isSiteUiLoggedOut("gpt-store", incoming.cookies);
 
-  applyCurrentSiteCookie(supabaseResponse, path, siteQuery, request, cookieSiteEarly, devPort);
+  applyCurrentSiteCookie(supabaseResponse, path, siteQuery, host, request, cookieSiteEarly, devPort);
 
-  if (isProtected && !sessionUiActive) {
+  const staffAuthLookupPending =
+    staffPath &&
+    gptLookup.timedOut &&
+    requestHasSupabaseAuthCookie(incoming.cookies) &&
+    !isSiteUiLoggedOut("gpt-store", incoming.cookies);
+
+  if (isProtected && !sessionUiActive && !staffAuthLookupPending) {
     const url = request.nextUrl.clone();
     const fullPath = path + (request.nextUrl.search || "");
     const loginSite = resolveAuthSiteContext({
@@ -337,48 +405,30 @@ export async function middleware(request: NextRequest) {
     }
 
     if (loggedInForThisSheet && siteForLogin !== "subs-store" && gptUser) {
-      const role = await resolveServerRole(gptUser);
-      const returnUrl = request.nextUrl.searchParams.get("returnUrl");
-      const target = resolveStaffAuthRedirect(role, returnUrl);
-      return redirectPreservingCookies(new URL(target, request.url), supabaseResponse);
+      try {
+        const role = await withTimeout(resolveServerRole(gptUser), MIDDLEWARE_ROLE_MS);
+        const returnUrl = request.nextUrl.searchParams.get("returnUrl");
+        const target = resolveStaffAuthRedirect(role, returnUrl);
+        return redirectPreservingCookies(new URL(target, request.url), supabaseResponse);
+      } catch {
+        return supabaseResponse;
+      }
     }
   }
 
   if (gptUser && (path.startsWith("/dashboard") || path.startsWith("/cabinet"))) {
-    const role = await resolveServerRole(gptUser);
-    const staffAway = resolveStaffAwayFromClientCabinet(
-      role,
-      path,
-      request.nextUrl.search || "",
-    );
-    if (staffAway) {
-      return redirectPreservingCookies(new URL(staffAway, request.url), supabaseResponse);
-    }
-  }
-
-  if (gptUser && (path.startsWith("/admin") || path.startsWith("/operator"))) {
-    const role = await resolveServerRole(gptUser);
-
-    if (role !== "admin" && role !== "operator") {
-      return redirectPreservingCookies(
-        new URL("/dashboard?site=gpt-store", request.url),
-        supabaseResponse,
+    try {
+      const role = await withTimeout(resolveServerRole(gptUser), MIDDLEWARE_ROLE_MS);
+      const staffAway = resolveStaffAwayFromClientCabinet(
+        role,
+        path,
+        request.nextUrl.search || "",
       );
-    }
-
-    if (path.startsWith("/admin") && role === "operator") {
-      const suffix = path.replace(/^\/admin/, "") || "";
-      return redirectPreservingCookies(
-        new URL(`/operator${suffix}${request.nextUrl.search}`, request.url),
-        supabaseResponse,
-      );
-    }
-    if (path.startsWith("/operator") && role === "admin") {
-      const suffix = path.replace(/^\/operator/, "") || "";
-      return redirectPreservingCookies(
-        new URL(`/admin${suffix}${request.nextUrl.search}`, request.url),
-        supabaseResponse,
-      );
+      if (staffAway) {
+        return redirectPreservingCookies(new URL(staffAway, request.url), supabaseResponse);
+      }
+    } catch {
+      /* role probe timeout — не блокируем кабинет в middleware */
     }
   }
 

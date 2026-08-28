@@ -14,6 +14,7 @@ import { getSiteUUID } from "@/lib/admin/getSiteId";
 import { countAuthUsersForAdminSite } from "@/lib/admin/gpt-auth-user-metrics";
 import { gptOrderStatusLabelRu } from "@/lib/admin/gpt-order-status-labels";
 import { staffPanelRootFromPathname } from "@/lib/admin/notificationNavigation";
+import { countGptStoreUnreadClientMessages } from "@/lib/admin/staff-chat-unread-count";
 import { loadAdminOverviewStats, type AdminOverviewStats } from "@/lib/admin/revenue-stats";
 import { resolveAdminSiteSlug } from "@/lib/admin/siteFilter";
 import { staffNavHref } from "@/lib/admin/staffNavHref";
@@ -144,26 +145,6 @@ export default async function AdminOverviewPage({
       reviewsBaseQ = admin.from("reviews").select("id", { count: "exact", head: true }).eq("status", "pending");
     }
 
-    let unreadClientMsgsQ;
-    if (siteId) {
-      const { data: siteSessionIds } = await admin.from("chat_sessions").select("id").eq("site_id", siteId);
-      const ids = (siteSessionIds ?? []).map((s) => s.id);
-      if (ids.length > 0) {
-        unreadClientMsgsQ = admin
-          .from("chat_messages")
-          .select("id", { count: "exact", head: true })
-          .eq("sender_type", "client")
-          .eq("is_read", false)
-          .in("session_id", ids);
-      }
-    } else {
-      unreadClientMsgsQ = admin
-        .from("chat_messages")
-        .select("id", { count: "exact", head: true })
-        .eq("sender_type", "client")
-        .eq("is_read", false);
-    }
-
     try {
       const [ov, analytics, totalRes, pendingRes, activeRes, chatsRes, reviewsRes, clientsCount, unreadRes] =
         await Promise.all([
@@ -183,7 +164,7 @@ export default async function AdminOverviewPage({
           chatsBaseQ,
           reviewsBaseQ,
           countAuthUsersForAdminSite(admin, "gpt-store"),
-          unreadClientMsgsQ ?? Promise.resolve({ count: 0 }),
+          countGptStoreUnreadClientMessages(admin, "gpt-store"),
         ]);
       overview = ov;
       periodStats = analytics;
@@ -193,7 +174,7 @@ export default async function AdminOverviewPage({
       openChats = chatsRes.count ?? 0;
       pendingReviews = reviewsRes.count ?? 0;
       totalClients = clientsCount;
-      unreadClientMsgs = (unreadRes as { count?: number | null }).count ?? 0;
+      unreadClientMsgs = unreadRes;
     } catch (err) {
       console.error("[admin/dashboard] GPT period stats failed", {
         message: err instanceof Error ? err.message : String(err),
