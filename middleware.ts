@@ -107,7 +107,7 @@ async function getUserWithTimeout(
       ),
     ]);
   } catch {
-    return { user: null, timedOut: false };
+    return { user: null, timedOut: true };
   }
 }
 
@@ -319,6 +319,11 @@ export async function middleware(request: NextRequest) {
     : null;
 
   const staffPath = path.startsWith("/admin") || path.startsWith("/operator");
+  const staffCookiePresent =
+    staffPath &&
+    requestHasSupabaseAuthCookie(incoming.cookies) &&
+    !isSiteUiLoggedOut("gpt-store", incoming.cookies);
+
   const needsSubsAuth =
     !staffPath &&
     (path.startsWith("/login") ||
@@ -328,7 +333,9 @@ export async function middleware(request: NextRequest) {
       cookieSiteEarly === "subs-store");
 
   const [gptLookup, subsLookup] = await Promise.all([
-    getUserWithTimeout(gptSb, AUTH_LOOKUP_MS),
+    staffCookiePresent
+      ? Promise.resolve({ user: null, timedOut: true } satisfies UserLookup)
+      : getUserWithTimeout(gptSb, AUTH_LOOKUP_MS),
     needsSubsAuth
       ? getUserWithTimeout(subsSb, AUTH_LOOKUP_MS)
       : Promise.resolve({ user: null, timedOut: false } satisfies { user: null; timedOut: boolean }),

@@ -1,22 +1,19 @@
 import type { User } from "@supabase/supabase-js";
 
 import { resolveRoleByEmail } from "@/lib/auth/resolveRole";
+import { fastStaffRoleFromEmail, roleFromEmailFallback } from "@/lib/auth/fast-staff-role";
 import {
   loadStaffRoleFromAudit,
   loadStaffRoleFromSiteMemberships,
   mergeStaffRoles,
 } from "@/lib/auth/staffRoleRestore";
 import type { SiteSlug } from "@/lib/auth/siteUiSession";
-import { effectiveRoleFromProfile, isSuperAdminEmail } from "@/lib/auth/superAdmin";
+import { effectiveRoleFromProfile } from "@/lib/auth/superAdmin";
 import { tryCreateAdminClient } from "@/lib/supabase/server";
 import { createSubsStoreAdminClient } from "@/lib/supabase/subs-store-admin";
 import type { UserRole } from "@/types/database";
 
-function roleFromEnvFallback(email: string | null | undefined): UserRole {
-  if (isSuperAdminEmail(email)) return "admin";
-  const fromEnv = resolveRoleByEmail(email);
-  return fromEnv === "admin" || fromEnv === "operator" ? fromEnv : "client";
-}
+const roleFromEnvFallback = roleFromEmailFallback;
 
 async function loadStaffRoleByEmail(
   admin: NonNullable<ReturnType<typeof tryCreateAdminClient>>,
@@ -64,6 +61,9 @@ async function loadStaffRoleByEmail(
 
 export async function resolveServerRole(user: User | null): Promise<UserRole> {
   if (!user) return "client";
+
+  const fast = fastStaffRoleFromEmail(user.email);
+  if (fast) return fast;
 
   try {
     const admin = tryCreateAdminClient();

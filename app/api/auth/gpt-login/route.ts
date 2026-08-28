@@ -11,6 +11,7 @@ import { hasSubsStoreAuthUserByEmail } from "@/lib/auth/subsMembershipByEmail";
 import { clearSiteUiLogout } from "@/lib/auth/siteUiSession";
 import { syncProfileRoleForUser } from "@/lib/auth/syncProfileRole";
 import { upsertSiteMembership } from "@/lib/auth/siteMembership";
+import { fastStaffRoleFromEmail } from "@/lib/auth/fast-staff-role";
 import { createClient } from "@/lib/supabase/server";
 
 type Body = {
@@ -102,10 +103,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const role = await syncProfileRoleForUser(authData.user.id, authData.user.email ?? null);
-  const membershipRole: "customer" | "operator" | "admin" =
-    role === "admin" || role === "operator" ? role : "customer";
-  await upsertSiteMembership(authData.user.id, "gpt-store", membershipRole).catch(() => undefined);
+  const fastRole = fastStaffRoleFromEmail(authData.user.email);
+  const rolePromise = syncProfileRoleForUser(authData.user.id, authData.user.email ?? null).then((synced) => {
+    const membershipRole: "customer" | "operator" | "admin" =
+      synced === "admin" || synced === "operator" ? synced : "customer";
+    void upsertSiteMembership(authData.user.id, "gpt-store", membershipRole).catch(() => undefined);
+    return synced;
+  });
+
+  let role;
+  if (fastRole) {
+    void rolePromise.catch(() => undefined);
+    role = fastRole;
+  } else {
+    role = await rolePromise;
+  }
 
   const path = resolvePostLoginPath(effectiveReturnUrl, role);
   const res = NextResponse.json({ ok: true, path, role });

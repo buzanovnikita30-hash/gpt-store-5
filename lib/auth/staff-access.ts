@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
+import { fastStaffRoleFromEmail } from "@/lib/auth/fast-staff-role";
 import { StaffAuthUnavailableError } from "@/lib/auth/staff-auth-errors";
 import { staffLoginUrl } from "@/lib/auth/staff-auth-redirect";
 import { resolveServerRole } from "@/lib/auth/server-role";
@@ -15,8 +16,9 @@ export {
   staffPanelHome,
 } from "@/lib/auth/staff-auth-redirect";
 
-const STAFF_USER_LOOKUP_MS = 6_000;
-const STAFF_ROLE_LOOKUP_MS = 6_000;
+const STAFF_SESSION_MS = 1_200;
+const STAFF_USER_LOOKUP_MS = 3_500;
+const STAFF_ROLE_LOOKUP_MS = 2_500;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -34,39 +36,71 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+function sessionStillFresh(expiresAt: number | undefined): boolean {
+  if (!expiresAt) return false;
+  return expiresAt * 1000 > Date.now() + 20_000;
+}
+
 /**
- * Один probe на RSC-запрос: getUser (без лишнего getSession) + роль.
- * Timeout → StaffAuthUnavailableError (терминальный UI), не «гость».
+ * Один probe на RSC-запрос.
+ * Свежая JWT-сессия + email staff → сразу в панель, без Auth/DB round-trip.
+ * Таймаут Auth не трактуем как «гость» (не выкидываем).
  */
 export const loadGptStaffAuth = cache(async (): Promise<{ user: User | null; role: UserRole }> => {
-  let user: User | null;
+  const supabase = await tryCreateClient();
+  if (!supabase) {
+    throw new StaffAuthUnavailableError("Supabase client unavailable");
+  }
+
+  let sessionUser: User | null = null;
+  let expiresAt: number | undefined;
   try {
-    const supabase = await tryCreateClient();
-    if (!supabase) {
-      throw new StaffAuthUnavailableError("Supabase client unavailable");
-    }
+    const { data } = await withTimeout(supabase.auth.getSession(), STAFF_SESSION_MS, "staff_session_timeout");
+    sessionUser = data.session?.user ?? null;
+    expiresAt = data.session?.expires_at;
+  } catch {
+    sessionUser = null;
+  }
+
+  const fastFromSession = sessionUser ? fastStaffRoleFromEmail(sessionUser.email) : null;
+  if (sessionUser && fastFromSession && sessionStillFresh(expiresAt)) {
+    return { user: sessionUser, role: fastFromSession };
+  }
+
+  let user = sessionUser;
+  try {
     const result = await withTimeout(supabase.auth.getUser(), STAFF_USER_LOOKUP_MS, "staff_user_timeout");
     user = result.data.user ?? null;
   } catch (err) {
-    if (err instanceof StaffAuthUnavailableError) throw err;
-    if (err instanceof Error && err.message === "staff_user_timeout") {
+    if (sessionUser && fastFromSession) {
+      return { user: sessionUser, role: fastFromSession };
+    }
+    if (sessionUser) {
+      user = sessionUser;
+    } else if (err instanceof Error && err.message === "staff_user_timeout") {
+      throw new StaffAuthUnavailableError();
+    } else {
       throw new StaffAuthUnavailableError();
     }
-    throw new StaffAuthUnavailableError();
   }
 
   if (!user) {
     return { user: null, role: "client" };
   }
 
+  const fast = fastStaffRoleFromEmail(user.email);
+  if (fast) {
+    return { user, role: fast };
+  }
+
   try {
     const role = await withTimeout(resolveServerRole(user), STAFF_ROLE_LOOKUP_MS, "staff_role_timeout");
     return { user, role };
-  } catch (err) {
-    if (err instanceof Error && err.message === "staff_role_timeout") {
-      throw new StaffAuthUnavailableError();
+  } catch {
+    if (fastFromSession) {
+      return { user, role: fastFromSession };
     }
-    throw err;
+    throw new StaffAuthUnavailableError();
   }
 });
 

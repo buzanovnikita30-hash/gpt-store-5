@@ -109,12 +109,8 @@ export function LoginForm() {
           typeof loginBody.path === "string" && loginBody.path.startsWith("/")
             ? loginBody.path
             : resolvePostLoginPath(effectiveReturnUrl, role);
-        if (target.startsWith("/admin") || target.startsWith("/operator")) {
-          window.location.assign(target);
-          return;
-        }
-        router.push(target);
-        router.refresh();
+        window.location.assign(target);
+        return;
       } catch {
         setServerError("Сервер временно недоступен. Повторите попытку через 10-20 секунд.");
       }
