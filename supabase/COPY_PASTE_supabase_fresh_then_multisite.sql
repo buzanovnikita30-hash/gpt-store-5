@@ -1,4 +1,4 @@
--- =============================================================================
+﻿-- =============================================================================
 -- СКОПИРУЙТЕ ВСЁ ОТСЮДА ДО КОНЦА ФАЙЛА → Supabase → SQL Editor → Run (один раз)
 --
 -- Назначение: пустая / новая база → базовые таблицы (001–003) + мультисайт (009)
@@ -418,8 +418,8 @@ CREATE TABLE IF NOT EXISTS public.sites (
 
 INSERT INTO public.sites (slug, brand_name, product_type, support_telegram, support_email, primary_color, accent_color, seo_title)
 VALUES
-  ('gpt-store',  'GPT STORE',  'chatgpt', '@subrfmanager', 'nbuzanov0@mail.ru', '#10a37f', '#10a37f', 'GPT STORE - ChatGPT Plus bez inostrannoj karty'),
-  ('subs-store', 'Subs Store', 'spotify',  '@subs_support', 'nbuzanov0@mail.ru', '#1DB954', '#1DB954', 'Subs Store - Spotify Premium v Rossii')
+  ('gpt-store',  'GPT STORE',  'chatgpt', '@subrfmanager', 'karvanenigor98@gmail.com', '#10a37f', '#10a37f', 'GPT STORE - ChatGPT Plus bez inostrannoj karty'),
+  ('subs-store', 'Subs Store', 'spotify',  '@subs_support', 'karvanenigor98@gmail.com', '#1DB954', '#1DB954', 'Subs Store - Spotify Premium v Rossii')
 ON CONFLICT (slug) DO UPDATE
   SET brand_name       = EXCLUDED.brand_name,
       product_type     = EXCLUDED.product_type,
@@ -610,13 +610,13 @@ ON CONFLICT (user_id, site_slug) DO NOTHING;
 INSERT INTO public.site_memberships (user_id, site_slug, role)
 SELECT p.id, 'gpt-store', 'admin'
 FROM public.profiles p
-WHERE p.email = 'nbuzanov0@mail.ru'
+WHERE p.email = 'karvanenigor98@gmail.com'
 ON CONFLICT (user_id, site_slug) DO UPDATE SET role = 'admin', updated_at = now();
 
 INSERT INTO public.site_memberships (user_id, site_slug, role)
 SELECT p.id, 'subs-store', 'admin'
 FROM public.profiles p
-WHERE p.email = 'nbuzanov0@mail.ru'
+WHERE p.email = 'karvanenigor98@gmail.com'
 ON CONFLICT (user_id, site_slug) DO UPDATE SET role = 'admin', updated_at = now();
 
 -- =============================================================================

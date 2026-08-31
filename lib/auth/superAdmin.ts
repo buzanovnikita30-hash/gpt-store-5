@@ -1,12 +1,11 @@
 import type { UserRole } from "@/types/database";
 
 /** Основной email супер-админа (используется в UI и документации). */
-export const SUPER_ADMIN_EMAIL = "nbuzanov0@mail.ru" as const;
+export const SUPER_ADMIN_EMAIL = "karvanenigor98@gmail.com" as const;
 
 /** Дубликаты/старые записи в Supabase Auth — те же права admin. */
 export const SUPER_ADMIN_EMAIL_ALIASES = [
   SUPER_ADMIN_EMAIL,
-  "nbuzanov@mail.ru",
 ] as const;
 
 export function normalizeAuthEmail(email: string | null | undefined): string {

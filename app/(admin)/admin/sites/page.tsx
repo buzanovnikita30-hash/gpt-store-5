@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ExternalLink, Settings } from "lucide-react";
+import { SUPER_ADMIN_EMAIL } from "@/lib/auth/superAdmin";
 import { SITES } from "@/lib/sites";
 
 export const metadata: Metadata = { title: "Магазины — Admin" };
@@ -118,7 +119,7 @@ export default function SitesPage() {
         </div>
         <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
           <p className="text-xs text-gray-400">Главный админ</p>
-          <p className="mt-1 text-sm font-semibold text-gray-700">nbuzanov0@mail.ru</p>
+          <p className="mt-1 text-sm font-semibold text-gray-700">{SUPER_ADMIN_EMAIL}</p>
           <p className="text-xs text-gray-400">Все магазины</p>
         </div>
       </div>

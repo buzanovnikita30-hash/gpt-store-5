@@ -5,6 +5,7 @@
  * Gracefully degrades if the table doesn't exist yet (migration not applied).
  */
 
+import { isSuperAdminEmail } from "@/lib/auth/superAdmin";
 import { tryCreateAdminClient } from "@/lib/supabase/server";
 
 export type SiteMembershipRole = "customer" | "operator" | "admin";
@@ -37,7 +38,7 @@ export async function upsertSiteMembership(
  * Checks if a user has membership for the given site.
  *
  * Rules:
- *   - Super admin (nbuzanov0@mail.ru) always has access everywhere.
+ *   - Super admin always has access everywhere.
  *   - GPT STORE (gpt-store): fail-open — сессия GPT Auth достаточна.
  *   - Subs Store (subs-store): fail-open — сессия Subs Auth достаточна (отдельный проект).
  *   - Other sites: strict check.
@@ -48,7 +49,7 @@ export async function hasSiteMembership(
   siteSlug: string,
 ): Promise<boolean> {
   // Super admin always has access everywhere
-  if (userEmail === "nbuzanov0@mail.ru") return true;
+  if (isSuperAdminEmail(userEmail)) return true;
 
   // Кабинет каждого магазина проверяется своей сессией в layout; membership не блокирует Subs-only users.
   if (siteSlug === "gpt-store" || siteSlug === "subs-store") return true;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSuperAdminEmail } from "@/lib/auth/superAdmin";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Super admin always has access
-  if (user.email === "nbuzanov0@mail.ru") {
+  if (isSuperAdminEmail(user.email)) {
     return NextResponse.json({ hasMembership: true });
   }
 
