@@ -50,7 +50,7 @@ interface ChatRequestBody {
   site?: string;
 }
 
-const SUPPORT_TELEGRAM_GPT = "t.me/subrfmanager";
+const SUPPORT_TELEGRAM_GPT = "t.me/subs_support";
 const SUPPORT_TELEGRAM_SUBS = "t.me/subs_support";
 const SUPPORT_TELEGRAM = SUPPORT_TELEGRAM_GPT;
 

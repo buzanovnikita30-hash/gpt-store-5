@@ -30,7 +30,7 @@ export const SITES: SiteDefinition[] = [
     productType: "chatgpt",
     primaryColor: "#10a37f",
     accentColor: "#10a37f",
-    supportTelegram: "@subrfmanager",
+    supportTelegram: "@subs_support",
     supportEmail: "nbuzanov0@mail.ru",
     productPrefix: "chatgpt",
     landingPath: "/",
