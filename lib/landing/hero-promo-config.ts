@@ -39,8 +39,15 @@ const AUGUST_2026: PromoWindow = {
   end: { year: 2026, month: 8, day: 31 },
 };
 
+/** Реальный последний день сентября (31.09 в JS Date = 1 октября). Копирайт на карточке — «1–31 сентября». */
+const SEPTEMBER_2026: PromoWindow = {
+  start: { year: 2026, month: 9, day: 1 },
+  end: { year: 2026, month: 9, day: 30 },
+};
+
 /**
- * Августовская акция 1–31.08.2026 (МСК).
+ * GPT: сентябрьская акция 1–30.09.2026 (МСК), витрина «1–31 сентября».
+ * Spotify: августовская акция 1–31.08.2026 (МСК).
  * Итоговые цены = promoSalePrice (без повторного −10% в checkout).
  */
 export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = {
@@ -48,19 +55,19 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     enabled: true,
     featuredPlanId: "plus-fast",
     promoSalePrice: 2590,
-    promoOriginalPrice: 2990,
+    promoOriginalPrice: 2890,
     discountLabel: "Скидка 10%",
     fallbackDiscountPercent: 10,
-    savingsRub: 400,
-    window: AUGUST_2026,
-    deadline: AUGUST_2026.end,
-    promoTitle: "Скидка 10% · до 31 августа",
-    periodBadge: "1–31 августа",
+    savingsRub: 300,
+    window: SEPTEMBER_2026,
+    deadline: SEPTEMBER_2026.end,
+    promoTitle: "Скидка 10% · до 31 сентября",
+    periodBadge: "1–31 сентября",
     offerHeadline: "Приоритетное подключение вне очереди — обычно 5–15 минут после передачи данных.",
     offerSubline: null,
     monthlyHint: null,
     terms: [
-      "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
+      "Акция действует с 1 по 31 сентября 2026 года (по московскому времени).",
       "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
       "Акция относится только к тарифу «Быстрая активация».",
       "Совместимость с промокодами определяется правилами сайта на момент оформления.",
@@ -117,4 +124,15 @@ export function heroPromoFixedDisplay(config: HeroPromoSiteConfig): {
 
 export function heroPromoPeriodLabel(config: HeroPromoSiteConfig): string {
   return config.periodBadge || formatPromoPeriodRange(config.window);
+}
+
+/** Бейдж «До 31 сентября» из periodBadge «1–31 сентября» (не из calendar deadline). */
+export function heroPromoUntilLabel(config: HeroPromoSiteConfig): string {
+  const badge = config.periodBadge.trim();
+  const dash = badge.indexOf("–");
+  if (dash >= 0) {
+    const until = badge.slice(dash + 1).trim();
+    if (until) return `До ${until}`;
+  }
+  return `До ${formatPromoPeriodRange(config.window).replace(/^\d+–/, "")}`.trim();
 }

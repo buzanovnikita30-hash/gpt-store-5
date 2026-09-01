@@ -196,7 +196,7 @@ export function HeroPromoOfferCard({ site, className, layout = "compact" }: Hero
                 )}
               >
                 <CalendarDays className="h-3 w-3" aria-hidden />
-                До 31 августа
+                {offer.untilLabel || offer.periodBadge}
               </span>
             ) : null}
           </div>

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GO_PLANS, PLUS_PLANS, PRO_PLANS, PRODUCTS, PLUS_READY_CHECKOUT_WARNING, type ProductId } from "@/lib/chatgpt-data";
 import { mergeGptStorefrontPlans } from "@/lib/landing/gpt-storefront-plans";
+import { HERO_PROMO_CONFIG, heroPromoUntilLabel } from "@/lib/landing/hero-promo-config";
+import { isPromoWindowActive } from "@/lib/landing/promo-deadline";
 import { fadeUp } from "@/lib/motion-config";
 import {
   GPT_TARIFF_GUIDE_ITEMS,
@@ -524,12 +526,25 @@ export function PricingSection({
           >
             {plans.map((plan, index) => {
               const isInStock = plan.inStock !== false;
-              const original = plan.original_price ?? plan.price;
-              const displayPrice = plan.price;
-              const discountLabel = plan.landing_discount_name ?? null;
+              const gptPromo = HERO_PROMO_CONFIG.gpt;
+              const featuredPromo =
+                gptPromo.enabled &&
+                plan.id === gptPromo.featuredPlanId &&
+                isPromoWindowActive(gptPromo.window);
+              const displayPrice = featuredPromo ? gptPromo.promoSalePrice : plan.price;
+              const original = featuredPromo
+                ? gptPromo.promoOriginalPrice
+                : (plan.original_price ?? plan.price);
+              const discountLabel = featuredPromo
+                ? gptPromo.discountLabel
+                : (plan.landing_discount_name ?? null);
+              const savingsRub = featuredPromo
+                ? gptPromo.savingsRub
+                : Math.max(0, original - displayPrice);
+              const untilLabel = featuredPromo ? heroPromoUntilLabel(gptPromo) : null;
               const showDiscount = original > displayPrice;
               const ctaText =
-                plan.price > 0
+                displayPrice > 0
                   ? `Подключить за ${displayPrice.toLocaleString("ru")} ${plan.currency}`
                   : plan.cta;
 
@@ -741,7 +756,7 @@ export function PricingSection({
                     )}
                   </div>
                   <div className="flex flex-wrap items-end gap-2">
-                    {plan.price > 0 ? (
+                    {displayPrice > 0 ? (
                       <>
                         {showDiscount && (
                           <span className="font-heading text-lg font-semibold text-gray-400 line-through">
@@ -761,10 +776,25 @@ export function PricingSection({
                   </div>
                   <div className="mt-1 flex min-h-[1.5rem] items-center justify-between gap-2">
                     <p className="text-xs text-gray-400">/ {plan.period}</p>
-                    {showDiscount && discountLabel ? (
-                      <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 ring-1 ring-amber-300/80">
-                        <span className="text-xs font-extrabold uppercase tracking-wide text-amber-800">Скидка</span>
-                        <span className="text-[11px] font-semibold text-amber-700">{discountLabel}</span>
+                    {showDiscount ? (
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        {discountLabel ? (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 ring-1 ring-amber-300/80">
+                            <span className="text-xs font-extrabold uppercase tracking-wide text-amber-800">
+                              {discountLabel.startsWith("Скидка") ? discountLabel : `Скидка ${discountLabel}`}
+                            </span>
+                          </div>
+                        ) : null}
+                        {savingsRub > 0 && featuredPromo ? (
+                          <div className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-700">
+                            минус {savingsRub.toLocaleString("ru")} ₽
+                          </div>
+                        ) : null}
+                        {untilLabel ? (
+                          <div className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-700">
+                            {untilLabel}
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <span className="invisible inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs">
@@ -810,7 +840,7 @@ export function PricingSection({
                 </ul>
 
                 <div className="relative mt-auto shrink-0 pt-2">
-                  {plan.price > 0 && isInStock ? (
+                  {displayPrice > 0 && isInStock ? (
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                       <ConnectCheckoutButton
                         siteSlug="gpt-store"

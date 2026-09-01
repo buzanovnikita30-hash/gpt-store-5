@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { HERO_PROMO_CONFIG, type HeroPromoSiteKey } from "@/lib/landing/hero-promo-config";
-import { getDaysUntilPromoDeadline, isPromoWindowActive } from "@/lib/landing/promo-deadline";
+import { HERO_PROMO_CONFIG, heroPromoUntilLabel, type HeroPromoSiteKey } from "@/lib/landing/hero-promo-config";
+import { formatPromoDeadlineLabel, getDaysUntilPromoDeadline, isPromoWindowActive } from "@/lib/landing/promo-deadline";
 import {
   resolveGptHeroPromoOffer,
   resolveSpotifyHeroPromoOffer,
@@ -152,7 +152,7 @@ export function useHeroPromoOffer(site: HeroPromoSiteKey): HeroPromoState {
   return {
     offer,
     daysLeft,
-    deadlineLabel: "31 августа",
+    deadlineLabel: heroPromoUntilLabel(config).replace(/^До\s+/i, "") || formatPromoDeadlineLabel(config.deadline),
     promoTitle: config.promoTitle,
     promoActive: Boolean(offer?.promoActive ?? promoActive),
     loading,

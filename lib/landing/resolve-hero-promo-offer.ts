@@ -2,6 +2,7 @@ import { applyLandingDiscount, pickLandingDiscount, type LandingDiscount } from 
 import {
   heroPromoFixedDisplay,
   heroPromoPeriodLabel,
+  heroPromoUntilLabel,
   type HeroPromoSiteConfig,
 } from "@/lib/landing/hero-promo-config";
 import { isPromoWindowActive } from "@/lib/landing/promo-deadline";
@@ -29,6 +30,8 @@ export type HeroPromoOffer = {
   offerSubline: string | null;
   monthlyHint: string | null;
   periodBadge: string | null;
+  /** «До 31 сентября» — маркетинговая дата с карточки, не calendar overflow */
+  untilLabel: string | null;
   promoBanner: string | null;
   terms: string[];
 };
@@ -77,7 +80,7 @@ function resolvePrices(
   config: HeroPromoSiteConfig,
   now: Date,
 ): { original: number; sale: number; label: string | null; promoActive: boolean; savingsRub: number } {
-  // August campaign wins for featured plan while window is open.
+  // Fixed hero campaign wins for featured plan while window is open.
   const fixed = activeFixedPromo(config, now);
   if (fixed && planId === config.featuredPlanId) {
     return {
@@ -121,7 +124,7 @@ function buildOfferBase(
   promoActive: boolean,
 ): Pick<
   HeroPromoOffer,
-  "offerHeadline" | "offerSubline" | "monthlyHint" | "periodBadge" | "promoBanner" | "terms"
+  "offerHeadline" | "offerSubline" | "monthlyHint" | "periodBadge" | "untilLabel" | "promoBanner" | "terms"
 > {
   if (!promoActive) {
     return {
@@ -129,6 +132,7 @@ function buildOfferBase(
       offerSubline: null,
       monthlyHint: null,
       periodBadge: null,
+      untilLabel: null,
       promoBanner: null,
       terms: [],
     };
@@ -138,6 +142,7 @@ function buildOfferBase(
     offerSubline: config.offerSubline,
     monthlyHint: config.monthlyHint,
     periodBadge: heroPromoPeriodLabel(config),
+    untilLabel: heroPromoUntilLabel(config),
     promoBanner: config.promoTitle,
     terms: config.terms,
   };
