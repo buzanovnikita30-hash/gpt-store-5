@@ -9,7 +9,7 @@ type GptPlanWithDisplay = ExtendedPlan & {
 };
 
 /**
- * Applies August campaign display prices to the featured plan while the window is open.
+ * Applies hero campaign display prices to the featured plan while the window is open.
  * Sale price becomes `plan.price` (checkout amount). Original is visual only.
  * Does not stack an extra % on top of promoSalePrice.
  */

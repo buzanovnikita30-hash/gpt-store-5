@@ -20,6 +20,7 @@ export type SpotifyHeroPromoUi = {
   discountLabel: string;
   savingsRub: number;
   periodBadge: string;
+  untilLabel?: string | null;
   offerHeadline: string;
   monthlyHint: string | null;
   promoBanner: string;
@@ -41,7 +42,7 @@ export type SpotifyPromoPlayerCardProps = {
   variant?: "glass" | "solid";
   size?: "default" | "large" | "wide";
   className?: string;
-  /** August campaign chrome — when set, shows strikethrough + badges + countdown */
+  /** Hero campaign chrome — strikethrough + badges + countdown */
   promo?: SpotifyHeroPromoUi | null;
 };
 
@@ -222,7 +223,7 @@ export function SpotifyPromoPlayerCard({
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
               <CalendarDays className="h-3 w-3" aria-hidden />
-              До 31 августа
+              {promo.untilLabel || "До 31 сентября"}
             </span>
           </div>
         ) : null}

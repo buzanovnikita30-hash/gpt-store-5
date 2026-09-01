@@ -37,6 +37,9 @@ import {
   TariffChooseGuide,
 } from "@/components/landing/TariffChooseGuide";
 import { ConnectCheckoutButton } from "@/components/checkout/ConnectCheckoutButton";
+import { HERO_PROMO_CONFIG, heroPromoUntilLabel } from "@/lib/landing/hero-promo-config";
+import { applyHeroPromoDisplayToSpotifyPlans } from "@/lib/landing/hero-promo-landing-discount";
+import { isPromoWindowActive } from "@/lib/landing/promo-deadline";
 
 export function SpotifyPricing() {
   const { plans: initialPlans, pricingSection: sec } = useSpotifyLanding();
@@ -45,13 +48,14 @@ export function SpotifyPricing() {
   const [showAllPlans, setShowAllPlans] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [runtimePlans, setRuntimePlans] = useState<SpotifyPlan[]>(
-    initialPlans.length ? initialPlans : SPOTIFY_PLANS,
+    applyHeroPromoDisplayToSpotifyPlans(initialPlans.length ? initialPlans : SPOTIFY_PLANS),
   );
   const lastPlansHashRef = useRef(JSON.stringify(runtimePlans));
 
   useEffect(() => {
-    setRuntimePlans(initialPlans.length ? initialPlans : SPOTIFY_PLANS);
-    lastPlansHashRef.current = JSON.stringify(initialPlans);
+    const next = applyHeroPromoDisplayToSpotifyPlans(initialPlans.length ? initialPlans : SPOTIFY_PLANS);
+    setRuntimePlans(next);
+    lastPlansHashRef.current = JSON.stringify(next);
   }, [initialPlans]);
 
   useEffect(() => {
@@ -65,7 +69,7 @@ export function SpotifyPricing() {
         });
         if (!res.ok) return;
         const json = (await res.json()) as { plans?: SpotifyPlan[] };
-        const next = json.plans ?? [];
+        const next = applyHeroPromoDisplayToSpotifyPlans(json.plans ?? []);
         if (!next.length) return;
         const hash = JSON.stringify(next);
         if (!cancelled && hash !== lastPlansHashRef.current) {
@@ -426,11 +430,19 @@ function PlanCard({
   const accent = planCardAccent(plan);
   const v = tierVisuals(tier, SPOTIFY_ACCENT);
   const period = planPeriodLabel(plan);
-  const displayPrice = plan.price;
-  const strikePrice = plan.originalPrice ?? plan.oldPrice;
+  const cfg = HERO_PROMO_CONFIG.spotify;
+  const featuredPromo =
+    cfg.enabled && plan.id === cfg.featuredPlanId && isPromoWindowActive(cfg.window);
+  const displayPrice = featuredPromo ? cfg.promoSalePrice : plan.price;
+  const strikePrice = featuredPromo ? cfg.promoOriginalPrice : (plan.originalPrice ?? plan.oldPrice);
   const showStrike = strikePrice != null && strikePrice > displayPrice;
-  const discountBadge = resolvePlanDiscountBadge(plan, displayPrice, strikePrice);
-  const monthly = computeMonthlyPrice(plan);
+  const discountBadge = featuredPromo
+    ? cfg.discountLabel
+    : resolvePlanDiscountBadge(plan, displayPrice, strikePrice);
+  const untilLabel = featuredPromo ? heroPromoUntilLabel(cfg) : null;
+  const monthly = computeMonthlyPrice(
+    featuredPromo ? { ...plan, price: displayPrice, originalPrice: strikePrice } : plan,
+  );
   const savings = computeSavingsText(plan, tabPlans);
   const savingsAccent =
     tier === "premium" ? "#f59e0b"
@@ -598,6 +610,11 @@ function PlanCard({
           <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
             {period}
           </p>
+          {untilLabel ? (
+            <p className="text-[11px] font-semibold" style={{ color: "rgba(255,255,255,0.62)" }}>
+              {untilLabel}
+            </p>
+          ) : null}
           <p
             className={`text-sm font-bold md:text-base ${monthly == null ? "invisible" : ""}`}
             style={{

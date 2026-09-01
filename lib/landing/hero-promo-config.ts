@@ -34,11 +34,6 @@ export type HeroPromoSiteConfig = {
   terms: string[];
 };
 
-const AUGUST_2026: PromoWindow = {
-  start: { year: 2026, month: 8, day: 1 },
-  end: { year: 2026, month: 8, day: 31 },
-};
-
 /** Реальный последний день сентября (31.09 в JS Date = 1 октября). Копирайт на карточке — «1–31 сентября». */
 const SEPTEMBER_2026: PromoWindow = {
   start: { year: 2026, month: 9, day: 1 },
@@ -46,9 +41,8 @@ const SEPTEMBER_2026: PromoWindow = {
 };
 
 /**
- * GPT: сентябрьская акция 1–30.09.2026 (МСК), витрина «1–31 сентября».
- * Spotify: августовская акция 1–31.08.2026 (МСК).
- * Итоговые цены = promoSalePrice (без повторного −10% в checkout).
+ * GPT / Spotify: сентябрьская акция 1–30.09.2026 (МСК), витрина «1–31 сентября».
+ * Итоговые цены = promoSalePrice (без повторного % в checkout).
  */
 export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = {
   gpt: {
@@ -77,20 +71,20 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     enabled: true,
     featuredPlanId: "spotify-duo-3m",
     promoSalePrice: 1690,
-    promoOriginalPrice: 1890,
-    discountLabel: "Скидка 10%",
-    fallbackDiscountPercent: 10,
-    savingsRub: 200,
-    window: AUGUST_2026,
-    deadline: AUGUST_2026.end,
-    promoTitle: "Скидка 10% · до 31 августа",
-    periodBadge: "1–31 августа",
+    promoOriginalPrice: 2190,
+    discountLabel: "Скидка 20%",
+    fallbackDiscountPercent: 20,
+    savingsRub: 500,
+    window: SEPTEMBER_2026,
+    deadline: SEPTEMBER_2026.end,
+    promoTitle: "Скидка 20% · до 31 сентября",
+    periodBadge: "1–31 сентября",
     offerHeadline: "Spotify Premium выгоднее для двоих",
     offerSubline: null,
     monthlyHint: "≈563 ₽ в месяц за двоих",
     terms: [
-      "Акция действует с 1 по 31 августа 2026 года (по московскому времени).",
-      "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
+      "Акция действует с 1 по 31 сентября 2026 года (по московскому времени).",
+      "Указанная на карточке цена уже итоговая — дополнительные 20% автоматически не вычитаются.",
       "Акция относится только к тарифу «Premium для двоих · 3 месяца».",
       "Совместимость с промокодами определяется правилами сайта на момент оформления.",
     ],

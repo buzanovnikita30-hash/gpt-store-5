@@ -57,12 +57,13 @@ export function SpotifyHero() {
     promoOffer?.promoActive && promoOffer.originalPrice > promoOffer.salePrice
       ? {
           originalPrice: promoOffer.originalPrice,
-          discountLabel: promoOffer.discountLabel || "Скидка 10%",
+          discountLabel: promoOffer.discountLabel || "Скидка 20%",
           savingsRub: promoOffer.savingsRub,
-          periodBadge: promoOffer.periodBadge || "1–31 августа",
+          periodBadge: promoOffer.periodBadge || "1–31 сентября",
+          untilLabel: promoOffer.untilLabel || "До 31 сентября",
           offerHeadline: promoOffer.offerHeadline || "Spotify Premium выгоднее для двоих",
           monthlyHint: promoOffer.monthlyHint,
-          promoBanner: promoOffer.promoBanner || "Скидка 10% · до 31 августа",
+          promoBanner: promoOffer.promoBanner || "Скидка 20% · до 31 сентября",
           countdown: promoCountdownLabel(Math.max(0, daysLeft)),
           terms: promoOffer.terms,
         }
