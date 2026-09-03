@@ -57,13 +57,13 @@ export function SpotifyHero() {
     promoOffer?.promoActive && promoOffer.originalPrice > promoOffer.salePrice
       ? {
           originalPrice: promoOffer.originalPrice,
-          discountLabel: promoOffer.discountLabel || "Скидка 20%",
+          discountLabel: promoOffer.discountLabel || "Скидка 90 ₽",
           savingsRub: promoOffer.savingsRub,
           periodBadge: promoOffer.periodBadge || "1–31 сентября",
           untilLabel: promoOffer.untilLabel || "До 31 сентября",
-          offerHeadline: promoOffer.offerHeadline || "Spotify Premium выгоднее для двоих",
+          offerHeadline: promoOffer.offerHeadline || "Готовый Premium с новым аккаунтом — если не нужен текущий профиль.",
           monthlyHint: promoOffer.monthlyHint,
-          promoBanner: promoOffer.promoBanner || "Скидка 20% · до 31 сентября",
+          promoBanner: promoOffer.promoBanner || "Скидка 90 ₽ · до 31 сентября",
           countdown: promoCountdownLabel(Math.max(0, daysLeft)),
           terms: promoOffer.terms,
         }
@@ -79,7 +79,14 @@ export function SpotifyHero() {
     ctaLabel,
     planId: promoOffer?.planId ?? checkoutPlan?.id ?? null,
     planName: promoOffer?.planName ?? checkoutPlan?.name ?? null,
-    tierLabel: checkoutPlan?.tab === "duo" ? "Duo" : checkoutPlan?.tab === "family" ? "Family" : "Premium",
+    tierLabel:
+      checkoutPlan?.id?.includes("new-account")
+        ? "Старт"
+        : checkoutPlan?.tab === "duo"
+          ? "Duo"
+          : checkoutPlan?.tab === "family"
+            ? "Family"
+            : "Premium",
     variant: "glass" as const,
     promo: promoUi,
   };

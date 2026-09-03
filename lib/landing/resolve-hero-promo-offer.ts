@@ -285,19 +285,23 @@ export function resolveSpotifyHeroPromoOffer(
 
   if (sale <= 0) return null;
   const hasDiscount = sale < original;
-  const periodLabel =
-    plan.durationMonths && plan.durationMonths > 1 ? `${plan.durationMonths} месяца` : "мес";
+  const isNewAccount = plan.id.includes("new-account");
+  const periodLabel = isNewAccount
+    ? "разовое подключение"
+    : plan.durationMonths && plan.durationMonths > 1
+      ? `${plan.durationMonths} месяца`
+      : "мес";
 
-  // Display name for duo hero: "Premium для двоих" not raw DB title
-  const planName =
-    plan.id === "spotify-duo-3m" || (plan.name.includes("двоих") && /3/.test(plan.name))
+  const planName = isNewAccount
+    ? "Новый аккаунт"
+    : plan.id === "spotify-duo-3m" || (plan.name.includes("двоих") && /3/.test(plan.name))
       ? "Premium для двоих"
       : plan.name;
 
   return {
     planId: plan.id,
     planName,
-    periodLabel: plan.durationMonths === 3 ? "3 месяца" : periodLabel,
+    periodLabel: plan.durationMonths === 3 && !isNewAccount ? "3 месяца" : periodLabel,
     originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
     discountLabel: promoActive && hasDiscount ? label : null,
