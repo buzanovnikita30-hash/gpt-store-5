@@ -70,10 +70,10 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
   spotify: {
     enabled: true,
     featuredPlanId: "spotify-new-account",
-    promoSalePrice: 440,
-    promoOriginalPrice: 531,
+    promoSalePrice: 349,
+    promoOriginalPrice: 440,
     discountLabel: "Скидка 91 ₽",
-    fallbackDiscountPercent: 17,
+    fallbackDiscountPercent: 21,
     savingsRub: 91,
     window: SEPTEMBER_2026,
     deadline: SEPTEMBER_2026.end,
