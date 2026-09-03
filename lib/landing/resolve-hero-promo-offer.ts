@@ -301,7 +301,7 @@ export function resolveSpotifyHeroPromoOffer(
   return {
     planId: plan.id,
     planName,
-    periodLabel: plan.durationMonths === 3 && !isNewAccount ? "3 месяца" : periodLabel,
+    periodLabel: isNewAccount ? periodLabel : plan.durationMonths === 3 ? "3 месяца" : periodLabel,
     originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
     discountLabel: promoActive && hasDiscount ? label : null,
