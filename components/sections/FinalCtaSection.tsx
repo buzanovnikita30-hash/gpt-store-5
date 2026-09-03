@@ -1,17 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Clock3, Lock, ShieldCheck } from "lucide-react";
+import { CreditCard, Headphones, ShieldCheck } from "lucide-react";
 import { fadeUp } from "@/lib/motion-config";
+import { useHeroPromoOffer } from "@/hooks/use-hero-promo-offer";
+import { GptFeaturedCheckoutCta } from "@/components/landing/GptFeaturedCheckoutCta";
 
 export function FinalCtaSection() {
+  const { offer, loading } = useHeroPromoOffer("gpt");
+  const promo = Boolean(offer?.promoActive);
+
   return (
-    <section id="final-cta" className="relative overflow-hidden py-16 md:py-28">
+    <section id="final-cta" className="relative overflow-hidden py-14 md:py-24">
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background: "radial-gradient(ellipse 80% 50% at 50% 100%, rgba(16,163,127,0.06) 0%, transparent 70%)",
         }}
+        aria-hidden
       />
 
       <motion.div
@@ -19,46 +25,46 @@ export function FinalCtaSection() {
         whileInView="visible"
         viewport={{ once: true, margin: "-80px" }}
         variants={fadeUp}
-        className="relative z-10 mx-auto max-w-4xl px-4 text-center"
+        className="relative z-10 mx-auto max-w-3xl px-4 text-center"
       >
-        <span className="mb-4 inline-block text-xs font-semibold uppercase tracking-widest text-[#10a37f]">
-          Готовы начать?
-        </span>
-        <h2 className="font-heading text-3xl font-bold text-gray-900 md:text-5xl">
-          Подключите ChatGPT Plus сегодня — без иностранной карты и лишних сложностей
+        <h2 className="font-heading text-2xl font-bold text-gray-900 md:text-4xl">
+          Подключите ChatGPT Plus без иностранной карты
         </h2>
-        <p className="mt-4 text-base text-gray-500 md:text-lg">
-          Выберите тариф, оплатите в рублях и получите доступ к ChatGPT Plus или Pro с гарантией и поддержкой.
+        <p className="mt-3 text-base text-gray-500 md:text-lg">
+          Оплата в рублях. Обычно подключение занимает 5–15 минут.
         </p>
 
-        <div className="mt-10">
-          <motion.a
-            href="#pricing"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="inline-flex items-center gap-2 rounded-xl px-6 py-3.5 text-base font-semibold text-white shadow-lg md:px-10 md:py-5 md:text-xl"
-            style={{
-              background: "#10a37f",
-              boxShadow: "0 4px 30px rgba(16,163,127,0.35)",
-            }}
-          >
-            Подключить ChatGPT Plus
-            <ArrowRight size={20} />
-          </motion.a>
+        {offer ? (
+          <div className="mt-6 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1">
+            {promo ? (
+              <span className="font-heading text-base font-semibold text-gray-400 line-through">
+                {offer.originalPrice.toLocaleString("ru")} ₽
+              </span>
+            ) : null}
+            <p className="font-heading text-3xl font-bold text-gray-900">
+              {offer.salePrice.toLocaleString("ru")} ₽
+              <span className="ml-1 text-base font-semibold text-gray-500">/ месяц</span>
+            </p>
+          </div>
+        ) : null}
+
+        <div className="mt-8 flex justify-center">
+          <GptFeaturedCheckoutCta
+            offer={offer}
+            loading={loading}
+            trackSource="landing_final_cta"
+            className="md:min-w-[22rem]"
+          />
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4 md:gap-8">
           {[
-            { icon: Lock, text: "Без иностранной карты" },
-            { icon: Clock3, text: "Активация 5–15 минут" },
-            { icon: ShieldCheck, text: "Гарантия на срок" },
+            { icon: ShieldCheck, text: "Гарантия" },
+            { icon: CreditCard, text: "Оплата в ₽" },
+            { icon: Headphones, text: "Поддержка" },
           ].map(({ icon: Icon, text }) => (
-            <div key={text} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Icon size={12} />
+            <div key={text} className="flex items-center gap-1.5 text-xs text-gray-500 md:text-sm">
+              <Icon size={14} className="text-[#10a37f]" aria-hidden />
               {text}
             </div>
           ))}
@@ -67,5 +73,3 @@ export function FinalCtaSection() {
     </section>
   );
 }
-
-

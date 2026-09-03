@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { LandingOrderStatusChip } from "@/components/landing/LandingOrderStatusChip";
 import { LandingAuthNavLink } from "@/components/landing/LandingAuthNavLink";
@@ -81,7 +80,7 @@ export function ChatGptLandingNav({ initialLoggedIn = false }: { initialLoggedIn
             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity duration-100 hover:opacity-90 sm:px-4 sm:py-2 sm:text-sm"
             style={{ background: "#10a37f" }}
           >
-            Подключить
+            Подключить Plus
           </button>
           <button
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors duration-100 hover:bg-gray-100 md:hidden"
@@ -93,47 +92,39 @@ export function ChatGptLandingNav({ initialLoggedIn = false }: { initialLoggedIn
         </div>
       </div>
 
-      {/* Mobile drawer */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-black/[0.06] md:hidden"
-          >
-            <nav className="flex flex-col gap-1 bg-white px-4 pb-4 pt-2">
-              {NAV_LINKS.map((link) => (
-                <button
-                  key={link.href}
-                  type="button"
-                  onClick={() => handleAnchorClick(link.href)}
-                  className="rounded-lg px-3 py-2.5 text-sm text-gray-600 transition-colors duration-100 hover:bg-gray-50 hover:text-gray-900"
-                >
-                  {link.label}
-                </button>
-              ))}
-              <LandingAuthNavLink
-                siteSlug="gpt-store"
-                initialLoggedIn={initialLoggedIn}
-                className="mt-1 flex items-center justify-center gap-1.5 rounded-lg border border-black/[0.1] px-3 py-2.5 text-center text-sm text-gray-600"
-              />
-              <div className="mt-1">
-                <LandingOrderStatusChip siteSlug="gpt-store" />
-              </div>
+      {/* Mobile drawer without animation to avoid jank on weaker devices */}
+      {open && (
+        <div className="overflow-hidden border-t border-black/[0.06] md:hidden">
+          <nav className="flex flex-col gap-1 bg-white px-4 pb-4 pt-2">
+            {NAV_LINKS.map((link) => (
               <button
+                key={link.href}
                 type="button"
-                onClick={() => handleAnchorClick("#pricing")}
-                className="mt-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold text-white"
-                style={{ background: "#10a37f" }}
+                onClick={() => handleAnchorClick(link.href)}
+                className="rounded-lg px-3 py-2.5 text-sm text-gray-600 transition-colors duration-100 hover:bg-gray-50 hover:text-gray-900"
               >
-                Подключить
+                {link.label}
               </button>
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            ))}
+            <LandingAuthNavLink
+              siteSlug="gpt-store"
+              initialLoggedIn={initialLoggedIn}
+              className="mt-1 flex items-center justify-center gap-1.5 rounded-lg border border-black/[0.1] px-3 py-2.5 text-center text-sm text-gray-600"
+            />
+            <div className="mt-1">
+              <LandingOrderStatusChip siteSlug="gpt-store" />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAnchorClick("#pricing")}
+              className="mt-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold text-white"
+              style={{ background: "#10a37f" }}
+            >
+              Подключить Plus
+            </button>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

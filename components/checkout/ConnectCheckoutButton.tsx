@@ -9,7 +9,7 @@ import { navigateToCheckoutOrAuth } from "@/lib/checkout/checkout-auth";
 import { getCheckoutEmailStepPath } from "@/lib/checkout/checkout-navigation";
 import { readCapturedPromo } from "@/lib/checkout/promo-capture";
 
-type ConnectCheckoutButtonProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick"> & {
+type ConnectCheckoutButtonProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
   siteSlug: AuthSiteSlug;
   planId: string;
   planName?: string | null;
@@ -26,6 +26,7 @@ export function ConnectCheckoutButton({
   promoCode,
   trackSource = "landing_pricing",
   children,
+  onClick,
   ...anchorProps
 }: ConnectCheckoutButtonProps) {
   const router = useRouter();
@@ -35,6 +36,7 @@ export function ConnectCheckoutButton({
 
   async function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
+    onClick?.(event);
     if (busy) return;
     setBusy(true);
     try {

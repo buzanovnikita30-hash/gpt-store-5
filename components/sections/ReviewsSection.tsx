@@ -89,7 +89,10 @@ export function ReviewsSection({ reviews, moreHref = "/reviews" }: ReviewsSectio
           <h2 className="font-heading text-3xl font-bold text-gray-900 md:text-4xl">
             Что говорят пользователи после подключения ChatGPT Plus
           </h2>
-          <p className="max-w-2xl text-lg text-gray-500">
+          <p className="max-w-2xl text-base text-gray-500 md:text-lg">
+            Нам доверяют более 10 000 пользователей
+          </p>
+          <p className="max-w-2xl text-sm text-gray-400">
             {count} реальных отзывов · средний рейтинг {averageLabel}/5 · сначала самые новые.
           </p>
         </motion.div>

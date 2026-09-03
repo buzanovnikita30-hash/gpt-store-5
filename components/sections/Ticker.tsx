@@ -1,40 +1,34 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { CheckCircle2, CreditCard, MessageCircle, Shield, Star, Zap } from "lucide-react";
+import { TRUST_BAR_ITEMS } from "@/lib/chatgpt-data";
 
-const TICKER_ITEMS = [
-  "⚡ Активация за 5–15 минут",
-  "✓ 1 200+ подключений",
-  "★ Рейтинг 4.9 / 5",
-  "🛡 Гарантия на весь срок",
-  "24/7 Поддержка",
-  "💳 Без иностранной карты",
-  "🇷🇺 Работает в России",
-];
+const ICONS = {
+  check: CheckCircle2,
+  star: Star,
+  shield: Shield,
+  card: CreditCard,
+  bolt: Zap,
+  chat: MessageCircle,
+} as const;
 
 export function Ticker() {
-  const repeated = [...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS];
-
   return (
-    <div className="relative overflow-hidden border-y border-black/[0.06] bg-white/50 py-3.5 backdrop-blur-sm">
-      <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-24"
-        style={{ background: "linear-gradient(to right, #f9fafb, transparent)" }} />
-      <div className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-24"
-        style={{ background: "linear-gradient(to left, #f9fafb, transparent)" }} />
-      <motion.div
-        className="flex gap-12 whitespace-nowrap"
-        animate={{ x: ["0%", "-33.33%"] }}
-        transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
-      >
-        {repeated.map((item, i) => (
-          <span key={i} className="inline-flex shrink-0 items-center gap-3 text-sm font-medium text-gray-500">
-            {item}
-            <span className="h-1 w-1 shrink-0 rounded-full bg-gray-300" />
-          </span>
-        ))}
-      </motion.div>
+    <div className="border-y border-black/[0.06] bg-white/80 py-3 md:py-3.5">
+      <ul className="mx-auto grid max-w-6xl grid-cols-2 gap-x-3 gap-y-2.5 px-4 sm:grid-cols-3 md:flex md:flex-wrap md:items-center md:justify-between md:gap-x-4 md:px-6">
+        {TRUST_BAR_ITEMS.map((item) => {
+          const Icon = ICONS[item.icon];
+          return (
+            <li key={item.label} className="inline-flex items-center gap-2 text-xs font-medium text-gray-600 md:text-sm">
+              <Icon
+                className={`h-3.5 w-3.5 shrink-0 ${item.icon === "star" ? "fill-amber-400 text-amber-400" : "text-[#10a37f]"}`}
+                aria-hidden
+              />
+              {item.label}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
-
-

@@ -7,11 +7,14 @@ import { CrossSellSection } from "@/components/sections/CrossSellSection";
 import { FaqSection } from "@/components/sections/FaqSection";
 import { FinalCtaSection } from "@/components/sections/FinalCtaSection";
 import { GuaranteeSection } from "@/components/sections/GuaranteeSection";
+import { GptPlusValueSection } from "@/components/sections/GptPlusValueSection";
+import { GptSelfPayCompareSection } from "@/components/sections/GptSelfPayCompareSection";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
 import { PricingSection } from "@/components/sections/PricingSection";
 import { ReviewsSection } from "@/components/sections/ReviewsSection";
 import { SafetySection } from "@/components/sections/SafetySection";
+import { WhyGptStoreSection } from "@/components/sections/WhyGptStoreSection";
 import { StoreConfigAutoRefresh } from "@/components/sections/StoreConfigAutoRefresh";
 import { Ticker } from "@/components/sections/Ticker";
 import { TokenSafetySection } from "@/components/sections/TokenSafetySection";
@@ -54,21 +57,28 @@ export default function HomePage() {
       <div className="relative min-h-screen bg-white">
         <LandingAnimatedBackground />
         <ChatGptLandingNav />
-        <main className="relative z-[1] overflow-x-hidden pb-20 pt-0 md:pb-0">
+        <main className="relative z-[1] overflow-x-hidden pb-20 pt-14 md:pb-0">
           <div className="relative z-[1] bg-white">
             <HeroSection />
-            <AnimateSection>
-              <Ticker />
-            </AnimateSection>
+            <Ticker />
           </div>
+          <AnimateSection delay={0.05}>
+            <HowItWorksSection />
+          </AnimateSection>
+          <AnimateSection delay={0.05}>
+            <WhyGptStoreSection />
+          </AnimateSection>
+          <AnimateSection delay={0.05}>
+            <GptSelfPayCompareSection />
+          </AnimateSection>
+          <AnimateSection delay={0.05}>
+            <GptPlusValueSection />
+          </AnimateSection>
           <AnimateSection delay={0.05}>
             <PricingSection
               initialPlans={storeConfig.plans}
               initialLandingDiscounts={storeConfig.landingDiscounts}
             />
-          </AnimateSection>
-          <AnimateSection delay={0.05}>
-            <HowItWorksSection />
           </AnimateSection>
           {showCompare && (
             <AnimateSection delay={0.05}>
