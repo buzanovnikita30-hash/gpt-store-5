@@ -16,6 +16,8 @@ function activeFixedPromo(config: HeroPromoSiteConfig, now = new Date()) {
 export type HeroPromoOffer = {
   planId: string;
   planName: string;
+  /** Витринный заголовок карточки; системное имя тарифа остаётся в planName */
+  displayPlanName: string | null;
   periodLabel: string;
   originalPrice: number;
   salePrice: number;
@@ -24,13 +26,15 @@ export type HeroPromoOffer = {
   savingsRub: number;
   checkoutHref: string;
   ctaLabel: string;
+  /** Полный CTA для широкой карточки; на узкой — ctaLabel */
+  ctaLabelWide: string | null;
   /** Акция активна (окно дат) — показывать strikethrough/бейджи/countdown */
   promoActive: boolean;
   offerHeadline: string | null;
   offerSubline: string | null;
   monthlyHint: string | null;
   periodBadge: string | null;
-  /** «До 31 сентября» — маркетинговая дата с карточки, не calendar overflow */
+  /** «До 30 сентября» — маркетинговая дата с карточки, не calendar overflow */
   untilLabel: string | null;
   promoBanner: string | null;
   terms: string[];
@@ -213,6 +217,7 @@ export function resolveGptHeroPromoOffer(
   return {
     planId: plan.id,
     planName: plan.name,
+    displayPlanName: config.displayPlanName,
     periodLabel: period,
     originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
@@ -221,6 +226,7 @@ export function resolveGptHeroPromoOffer(
     savingsRub: promoActive && hasDiscount ? savingsRub : 0,
     checkoutHref: `/checkout?plan=${encodeURIComponent(plan.id)}`,
     ctaLabel: `Подключить за ${sale.toLocaleString("ru")} ${currency}`,
+    ctaLabelWide: `Подключить ChatGPT Plus за ${sale.toLocaleString("ru")} ${currency}`,
     promoActive: promoActive && hasDiscount,
     ...buildOfferBase(config, promoActive && hasDiscount),
   };
@@ -301,6 +307,7 @@ export function resolveSpotifyHeroPromoOffer(
   return {
     planId: plan.id,
     planName,
+    displayPlanName: config.displayPlanName,
     periodLabel: isNewAccount ? periodLabel : plan.durationMonths === 3 ? "3 месяца" : periodLabel,
     originalPrice: hasDiscount ? original : sale,
     salePrice: sale,
@@ -309,6 +316,7 @@ export function resolveSpotifyHeroPromoOffer(
     savingsRub: promoActive && hasDiscount ? savingsRub : 0,
     checkoutHref: `/checkout/spotify?plan=${encodeURIComponent(plan.id)}`,
     ctaLabel: plan.ctaText?.trim() || `Подключить за ${sale.toLocaleString("ru")} ₽`,
+    ctaLabelWide: null,
     promoActive: promoActive && hasDiscount,
     ...buildOfferBase(config, promoActive && hasDiscount),
   };

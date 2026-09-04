@@ -24,6 +24,8 @@ export type HeroPromoSiteConfig = {
   promoTitle: string;
   /** Короткий период, напр. «1–31 августа» */
   periodBadge: string;
+  /** Витринное название карточки (не системное имя тарифа) */
+  displayPlanName: string | null;
   /** Продуктовый оффер под названием */
   offerHeadline: string;
   /** Вторая строка оффера (опционально) */
@@ -34,14 +36,14 @@ export type HeroPromoSiteConfig = {
   terms: string[];
 };
 
-/** Реальный последний день сентября (31.09 в JS Date = 1 октября). Копирайт на карточке — «1–31 сентября». */
+/** Календарное окно сентября 2026 (МСК) — последний день 30.09. */
 const SEPTEMBER_2026: PromoWindow = {
   start: { year: 2026, month: 9, day: 1 },
   end: { year: 2026, month: 9, day: 30 },
 };
 
 /**
- * GPT / Spotify: сентябрьская акция 1–30.09.2026 (МСК), витрина «1–31 сентября».
+ * GPT / Spotify: сентябрьская акция 1–30.09.2026 (МСК).
  * Итоговые цены = promoSalePrice (без повторного % в checkout).
  */
 export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = {
@@ -55,13 +57,14 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     savingsRub: 300,
     window: SEPTEMBER_2026,
     deadline: SEPTEMBER_2026.end,
-    promoTitle: "Скидка 10% · до 31 сентября",
-    periodBadge: "1–31 сентября",
-    offerHeadline: "Приоритетное подключение вне очереди — обычно 5–15 минут после передачи данных.",
+    promoTitle: "Скидка 10% · до 30 сентября",
+    periodBadge: "1–30 сентября",
+    displayPlanName: "ChatGPT Plus — 1 месяц",
+    offerHeadline: "Подключение на ваш аккаунт — обычно 5–15 минут после передачи данных.",
     offerSubline: null,
     monthlyHint: null,
     terms: [
-      "Акция действует с 1 по 31 сентября 2026 года (по московскому времени).",
+      "Акция действует с 1 по 30 сентября 2026 года (по московскому времени).",
       "Указанная на карточке цена уже итоговая — дополнительные 10% автоматически не вычитаются.",
       "Акция относится только к тарифу «Быстрая активация».",
       "Совместимость с промокодами определяется правилами сайта на момент оформления.",
@@ -79,6 +82,7 @@ export const HERO_PROMO_CONFIG: Record<HeroPromoSiteKey, HeroPromoSiteConfig> = 
     deadline: SEPTEMBER_2026.end,
     promoTitle: "Скидка 91 ₽ · до 31 сентября",
     periodBadge: "1–31 сентября",
+    displayPlanName: null,
     offerHeadline: "Готовый Premium на новом аккаунте — если текущий профиль не нужен.",
     offerSubline: null,
     monthlyHint: null,
@@ -120,7 +124,7 @@ export function heroPromoPeriodLabel(config: HeroPromoSiteConfig): string {
   return config.periodBadge || formatPromoPeriodRange(config.window);
 }
 
-/** Бейдж «До 31 сентября» из periodBadge «1–31 сентября» (не из calendar deadline). */
+/** Бейдж «До 30 сентября» из periodBadge «1–30 сентября» (не из calendar overflow). */
 export function heroPromoUntilLabel(config: HeroPromoSiteConfig): string {
   const badge = config.periodBadge.trim();
   const dash = badge.indexOf("–");
