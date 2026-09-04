@@ -13,6 +13,7 @@ type GptFeaturedCheckoutCtaProps = {
   trackSource: string;
   className?: string;
   fullWidth?: boolean;
+  size?: "default" | "lg";
 };
 
 export function GptFeaturedCheckoutCta({
@@ -21,12 +22,17 @@ export function GptFeaturedCheckoutCta({
   trackSource,
   className,
   fullWidth = true,
+  size = "default",
 }: GptFeaturedCheckoutCtaProps) {
   const planId = offer ? parsePlanIdFromCheckoutPath(offer.checkoutHref) : null;
   const label = offer?.ctaLabelWide || offer?.ctaLabel || "Подключить ChatGPT Plus";
+  const large = size === "lg";
 
   const classNames = cn(
-    "shimmer-btn relative inline-flex min-h-12 items-center justify-center gap-2 overflow-hidden rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10a37f] sm:px-8 sm:text-base",
+    "shimmer-btn relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#10a37f]",
+    large
+      ? "min-h-14 rounded-2xl px-7 py-3.5 text-base sm:min-h-16 sm:px-10 sm:text-lg"
+      : "min-h-12 px-6 py-3.5 text-sm sm:px-8 sm:text-base",
     fullWidth ? "w-full md:w-auto" : "w-full",
     className,
   );
@@ -46,7 +52,7 @@ export function GptFeaturedCheckoutCta({
   const inner = (
     <span className="relative z-[2] inline-flex items-center justify-center gap-2">
       {label}
-      <ArrowRight size={17} aria-hidden />
+      <ArrowRight size={large ? 22 : 17} aria-hidden />
     </span>
   );
 

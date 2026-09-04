@@ -58,7 +58,7 @@ export default function HomePage() {
         <LandingAnimatedBackground />
         <ChatGptLandingNav />
         <main className="relative z-[1] overflow-x-hidden pb-20 pt-14 md:pb-0">
-          <div className="relative z-[1] bg-white">
+          <div className="relative z-[1] flex min-h-[calc(100svh-3.5rem)] flex-col bg-white">
             <HeroSection />
             <Ticker />
           </div>

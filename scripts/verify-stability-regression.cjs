@@ -28,7 +28,7 @@ function assertFile(rel) {
 
 // Hero
 assertIncludes("components/spotify/SpotifyHero.tsx", "SpotifyPromoPlayerCard", "Spotify hero visual");
-assertIncludes("components/sections/HeroSection.tsx", "HeroPromoOfferCard", "GPT hero visual");
+assertIncludes("components/sections/HeroSection.tsx", "GptHeroResultCard", "GPT hero visual");
 assertIncludes("hooks/use-hero-promo-offer.ts", "Layout must never collapse", "hero offer after deadline");
 
 // Reviews / Anna
