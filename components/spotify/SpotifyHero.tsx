@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Clock3, CreditCard, Shield, Star } from "lucide-react";
 import {
   SPOTIFY_ACCENT,
   SPOTIFY_HERO_ACCENT_BASE,
@@ -10,281 +9,231 @@ import {
   SPOTIFY_HERO_BADGE_NO_TIMING,
   SPOTIFY_HERO_BADGE_WITH_TIMING,
 } from "@/lib/content/spotify";
-import { scrollToSpotifyPricing } from "@/lib/spotify/scroll-to-pricing";
-import { resolveHeroCheckoutPlan } from "@/lib/spotify/resolve-hero-checkout-plan";
-import { buildSpotifyHeroPlayerPreview } from "@/lib/spotify/build-hero-player-preview";
-import { promoCountdownLabel } from "@/lib/landing/promo-deadline";
-import { useHeroPromoOffer } from "@/hooks/use-hero-promo-offer";
-import { reachLandingGoal } from "@/lib/analytics/reach-landing-goal";
 import { useLandingHeroAb } from "@/lib/analytics/landing-hero-ab";
-import { SpotifyPromoPlayerCard } from "@/components/spotify/SpotifyPromoPlayerCard";
+import { useHeroPromoOffer } from "@/hooks/use-hero-promo-offer";
 import { useSpotifyLanding } from "@/components/spotify/SpotifyLandingProvider";
+import { SpotifyFeaturedCheckoutCta } from "@/components/landing/SpotifyFeaturedCheckoutCta";
+import { SpotifyHeroResultCard } from "@/components/spotify/SpotifyHeroResultCard";
+import { HeroPromoTermsPopover } from "@/components/landing/HeroPromoTermsPopover";
 
-function scrollToSpotifyPricingFromHero(source: string): void {
-  reachLandingGoal("landing_hero_cta_click", { site: "subs-store", source });
-  reachLandingGoal("landing_scroll_to_pricing", { site: "subs-store", source });
-  scrollToSpotifyPricing();
+const TRUST_ITEMS = [
+  { label: "Подключение за 10–15 минут", icon: Clock3 },
+  { label: "Оплата в рублях", icon: CreditCard },
+  { label: "Гарантия на весь срок", icon: Shield },
+  { label: "Рейтинг 4.9/5", icon: Star, href: "#reviews" },
+] as const;
+
+function scrollToHowItWorks(): void {
+  document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function HeroPriceBlock() {
+  const { hero } = useSpotifyLanding();
+  const { offer, loading } = useHeroPromoOffer("spotify");
+  const promo = Boolean(offer?.promoActive);
+
+  if (loading && !offer) {
+    return <div className="mt-5 h-16 w-52 animate-pulse rounded-xl bg-white/8" aria-hidden />;
+  }
+
+  if (!offer) return null;
+
+  const discountChip =
+    promo && offer.savingsRub > 0
+      ? `−${offer.savingsRub.toLocaleString("ru")} ₽${offer.untilLabel ? ` ${offer.untilLabel.replace(/^До\s+/i, "до ")}` : ""}`
+      : null;
+
+  const periodSuffix = offer.planId.includes("new-account")
+    ? "разово"
+    : offer.periodLabel === "мес"
+      ? "месяц"
+      : offer.periodLabel;
+
+  const price = (
+    <div className="mt-5 text-left" aria-label="Цена">
+      {discountChip ? (
+        offer.terms.length ? (
+          <HeroPromoTermsPopover terms={offer.terms} accent={SPOTIFY_ACCENT} isDark>
+            <span
+              className="mb-1.5 inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+              style={{ background: "rgba(29,185,84,0.16)", color: SPOTIFY_ACCENT }}
+            >
+              {discountChip}
+            </span>
+          </HeroPromoTermsPopover>
+        ) : (
+          <span
+            className="mb-1.5 inline-flex rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ background: "rgba(29,185,84,0.16)", color: SPOTIFY_ACCENT }}
+          >
+            {discountChip}
+          </span>
+        )
+      ) : null}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {promo ? (
+          <span className="font-heading text-lg font-semibold text-white/40 line-through md:text-xl">
+            {offer.originalPrice.toLocaleString("ru")} ₽
+          </span>
+        ) : null}
+        <p className="font-heading text-[1.85rem] font-bold leading-none text-white md:text-4xl">
+          {offer.salePrice.toLocaleString("ru")} ₽
+          {periodSuffix ? (
+            <span className="ml-1.5 text-base font-semibold text-white/50 md:text-lg">
+              / {periodSuffix}
+            </span>
+          ) : null}
+        </p>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {price}
+      <div className="mt-5 flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+        <SpotifyFeaturedCheckoutCta
+          offer={offer}
+          loading={loading}
+          trackSource="landing_hero"
+          size="lg"
+        />
+        <a
+          href="#how-it-works"
+          onClick={(e) => {
+            e.preventDefault();
+            scrollToHowItWorks();
+          }}
+          className="inline-flex min-h-14 items-center justify-center text-sm text-white/45 transition-colors hover:text-white/80 md:text-base"
+        >
+          {hero.secondaryCta} →
+        </a>
+      </div>
+      <p className="mt-3 hidden text-xs text-white/30 md:block md:text-sm">{hero.meta}</p>
+    </>
+  );
+}
+
+function TrustList({ compact = false }: { compact?: boolean }) {
+  return (
+    <ul
+      className={
+        compact
+          ? "mt-4 grid grid-cols-1 gap-2.5"
+          : "mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+      }
+    >
+      {TRUST_ITEMS.map((item) => {
+        const Icon = item.icon;
+        const isStar = item.label === "Рейтинг 4.9/5";
+        const body = (
+          <>
+            <span
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl md:h-11 md:w-11"
+              style={{ background: "rgba(29,185,84,0.14)" }}
+            >
+              <Icon
+                className={`h-5 w-5 md:h-6 md:w-6 ${isStar ? "fill-amber-400 text-amber-400" : ""}`}
+                style={isStar ? undefined : { color: SPOTIFY_ACCENT }}
+                aria-hidden
+              />
+            </span>
+            <span className="text-xs font-medium text-white/75 md:text-sm">{item.label}</span>
+          </>
+        );
+        return (
+          <li key={item.label}>
+            {"href" in item && item.href ? (
+              <a href={item.href} className="flex items-center gap-3 hover:text-white">
+                {body}
+              </a>
+            ) : (
+              <div className="flex items-center gap-3">{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 export function SpotifyHero() {
-  const { hero, heroPlayerPreview, plans } = useSpotifyLanding();
+  const { hero } = useSpotifyLanding();
   const heroAb = useLandingHeroAb("subs-store");
-  const { offer: promoOffer, daysLeft } = useHeroPromoOffer("spotify");
+  const reduceMotion = useReducedMotion();
   const badge = heroAb === "h1" ? SPOTIFY_HERO_BADGE_NO_TIMING : SPOTIFY_HERO_BADGE_WITH_TIMING;
   const accentTitle =
     heroAb === "h1" ? SPOTIFY_HERO_ACCENT_WITH_TIMING : SPOTIFY_HERO_ACCENT_BASE;
-  const checkoutPlan = useMemo(() => resolveHeroCheckoutPlan(plans), [plans]);
-  const player = useMemo(() => {
-    if (checkoutPlan) {
-      const fromPlan = buildSpotifyHeroPlayerPreview(checkoutPlan);
-      return {
-        ...fromPlan,
-        cardBadge: heroPlayerPreview.cardBadge || fromPlan.cardBadge,
-      };
-    }
-    return heroPlayerPreview;
-  }, [checkoutPlan, heroPlayerPreview]);
-
-  const salePrice = promoOffer?.salePrice ?? checkoutPlan?.price ?? player.priceRub;
-  const ctaLabel =
-    promoOffer?.ctaLabel ||
-    checkoutPlan?.ctaText?.trim() ||
-    (checkoutPlan
-      ? `Подключить за ${checkoutPlan.price.toLocaleString("ru")} ₽`
-      : hero.primaryCta);
-
-  const promoUi =
-    promoOffer?.promoActive && promoOffer.originalPrice > promoOffer.salePrice
-      ? {
-          originalPrice: promoOffer.originalPrice,
-          discountLabel: promoOffer.discountLabel || "Скидка 91 ₽",
-          savingsRub: promoOffer.savingsRub,
-          periodBadge: promoOffer.periodBadge || "1–31 сентября",
-          untilLabel: promoOffer.untilLabel || "До 31 сентября",
-          offerHeadline: promoOffer.offerHeadline || "Готовый Premium на новом аккаунте — если текущий профиль не нужен.",
-          monthlyHint: promoOffer.monthlyHint,
-          promoBanner: promoOffer.promoBanner || "Скидка 91 ₽ · до 31 сентября",
-          countdown: promoCountdownLabel(Math.max(0, daysLeft)),
-          terms: promoOffer.terms,
-        }
-      : null;
-
-  const cardProps = {
-    badge: player.cardBadge,
-    title: promoOffer?.planName || player.cardTitle,
-    subtitle: promoOffer?.periodLabel || player.cardSubtitle,
-    fromLabel: promoUi ? "" : player.fromLabel,
-    priceRub: salePrice,
-    featureChips: player.featureChips,
-    ctaLabel,
-    planId: promoOffer?.planId ?? checkoutPlan?.id ?? null,
-    planName: promoOffer?.planName ?? checkoutPlan?.name ?? null,
-    tierLabel: checkoutPlan?.id?.includes("new-account")
-      ? "Старт"
-      : checkoutPlan?.tab === "duo"
-        ? "Duo"
-        : checkoutPlan?.tab === "family"
-          ? "Family"
-          : "Premium",
-    variant: "glass" as const,
-    promo: promoUi,
-  };
 
   return (
     <section
       id="hero"
-      className="relative flex min-h-0 items-start overflow-x-hidden px-4 py-8 md:min-h-[min(720px,calc(100dvh-3.5rem))] md:items-center md:px-6 md:py-14 lg:py-16"
+      className="relative flex flex-1 flex-col justify-center overflow-x-hidden px-4 py-5 md:px-8 md:py-6 lg:px-11"
       style={{ background: "#0a0a0a" }}
     >
-      <div className="pointer-events-none absolute inset-0">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse 80% 55% at 50% 0%, rgba(29,185,84,0.12) 0%, transparent 65%),
-              radial-gradient(ellipse 45% 35% at 90% 90%, rgba(29,185,84,0.05) 0%, transparent 55%)
+              radial-gradient(ellipse 75% 55% at 50% 20%, rgba(29,185,84,0.10) 0%, transparent 68%),
+              radial-gradient(ellipse 50% 40% at 85% 90%, rgba(29,185,84,0.06) 0%, transparent 58%)
             `,
           }}
         />
       </div>
 
-      <div className="relative z-10 w-full">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-start gap-6 md:grid-cols-2 md:items-center md:gap-8 lg:gap-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      <div className="relative z-10 mx-auto grid w-full max-w-[72rem] grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] md:gap-8 lg:gap-11">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="text-left"
+        >
+          <div
+            className="mb-3 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-full border px-3 py-1.5 text-[11px] leading-snug md:mb-4 md:text-xs"
+            style={{
+              borderColor: "rgba(29,185,84,0.28)",
+              background: "rgba(29,185,84,0.10)",
+              color: SPOTIFY_ACCENT,
+            }}
           >
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.6 }}
-              className="mb-4 inline-flex max-w-full items-center gap-2.5 rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-wider shadow-lg sm:px-4 sm:text-xs md:mb-5"
-              style={{
-                background: "linear-gradient(135deg, rgba(29,185,84,0.18) 0%, rgba(29,185,84,0.08) 100%)",
-                border: "1px solid rgba(29,185,84,0.35)",
-                color: SPOTIFY_ACCENT,
-                boxShadow: "0 0 24px rgba(29,185,84,0.15)",
-              }}
-            >
-              <span
-                className="h-2 w-2 shrink-0 animate-pulse rounded-full"
-                style={{ background: SPOTIFY_ACCENT }}
-              />
-              <span className="truncate">{badge}</span>
-            </motion.div>
+            <span className="h-2 w-2 rounded-full" style={{ background: SPOTIFY_ACCENT }} />
+            {badge}
+          </div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.7 }}
-              className="font-heading font-bold leading-tight tracking-tight"
-            >
-              <span className="block text-3xl text-white md:text-4xl lg:text-5xl xl:text-6xl">
-                {hero.title}
-              </span>
-              <span
-                className="block text-3xl md:text-4xl lg:text-5xl xl:text-6xl"
-                style={{
-                  background: `linear-gradient(135deg, ${SPOTIFY_ACCENT} 0%, #17a549 100%)`,
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                {accentTitle}
-              </span>
-            </motion.h1>
+          <h1 className="font-heading text-[1.5rem] font-bold leading-[1.08] tracking-tight min-[375px]:text-[1.7rem] md:text-4xl lg:text-5xl xl:text-[3.5rem]">
+            <span className="text-white">{hero.title} </span>
+            <span style={{ color: SPOTIFY_ACCENT }}>{accentTitle}</span>
+          </h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-              className="mt-4 max-w-xl text-sm md:mt-5 md:text-base lg:text-lg"
-              style={{ color: "rgba(255,255,255,0.6)" }}
-            >
-              {hero.subtitle}
-            </motion.p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/55 md:mt-4 md:text-base lg:text-lg">
+            {hero.subtitle}
+          </p>
 
-            <motion.ul
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.6 }}
-              className="mt-4 flex flex-wrap gap-2 md:mt-5"
-            >
-              {hero.trustBadges.map((item, i) => (
-                <motion.li
-                  key={item}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 + i * 0.07 }}
-                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "rgba(255,255,255,0.7)",
-                  }}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: SPOTIFY_ACCENT }} />
-                  {item}
-                </motion.li>
-              ))}
-            </motion.ul>
+          <div className="hidden md:block">
+            <TrustList />
+          </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45, duration: 0.6 }}
-              className="mt-5 md:hidden"
-            >
-              <SpotifyPromoPlayerCard {...cardProps} size="default" />
-            </motion.div>
+          <HeroPriceBlock />
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.48, duration: 0.6 }}
-              className="mt-5 flex w-full flex-col gap-3 md:hidden"
-            >
-              <motion.button
-                type="button"
-                onClick={() => scrollToSpotifyPricingFromHero("hero_mobile")}
-                whileTap={{ scale: 0.98 }}
-                className="shimmer-btn relative inline-flex min-h-[44px] w-full items-center justify-center gap-2 overflow-hidden rounded-xl px-6 py-3.5 text-sm font-semibold text-white"
-                style={{
-                  background: SPOTIFY_ACCENT,
-                  boxShadow: "0 4px 20px rgba(29,185,84,0.35)",
-                }}
-              >
-                {hero.primaryCta}
-                <ArrowRight size={17} />
-              </motion.button>
-              <a
-                href="#how-it-works"
-                className="text-sm transition-colors"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-              >
-                {hero.secondaryCta} →
-              </a>
-            </motion.div>
+          <div className="md:hidden">
+            <TrustList compact />
+          </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.6 }}
-              className="mt-6 hidden w-full flex-col gap-3 md:flex sm:w-auto sm:flex-row sm:items-center sm:gap-4"
-            >
-              <motion.button
-                type="button"
-                onClick={() => scrollToSpotifyPricingFromHero("hero_desktop")}
-                whileHover={{ scale: 1.03, boxShadow: "0 6px 30px rgba(29,185,84,0.45)" }}
-                whileTap={{ scale: 0.98 }}
-                className="shimmer-btn relative inline-flex min-h-[44px] w-full items-center justify-center gap-2 overflow-hidden rounded-xl px-6 py-3.5 text-sm font-semibold text-white sm:w-auto sm:px-8 sm:py-4 sm:text-base"
-                style={{
-                  background: SPOTIFY_ACCENT,
-                  boxShadow: "0 4px 20px rgba(29,185,84,0.35)",
-                }}
-              >
-                <span className="relative z-[2] inline-flex items-center justify-center gap-2">
-                  {hero.primaryCta}
-                  <ArrowRight size={17} />
-                </span>
-              </motion.button>
-              <a
-                href="#how-it-works"
-                className="text-sm transition-colors"
-                style={{ color: "rgba(255,255,255,0.4)" }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.color = "rgba(255,255,255,0.8)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.color = "rgba(255,255,255,0.4)";
-                }}
-              >
-                {hero.secondaryCta} →
-              </a>
-            </motion.div>
+          <div className="mt-6 md:hidden">
+            <SpotifyHeroResultCard />
+          </div>
+        </motion.div>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="mt-3 hidden text-xs sm:block md:mt-4"
-              style={{ color: "rgba(255,255,255,0.3)" }}
-            >
-              {hero.meta}
-            </motion.p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.35, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="hidden min-w-0 md:block"
-          >
-            <SpotifyPromoPlayerCard {...cardProps} size="wide" />
-          </motion.div>
-        </div>
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="hidden h-full md:flex md:items-stretch"
+        >
+          <SpotifyHeroResultCard className="h-full w-full" />
+        </motion.div>
       </div>
     </section>
   );

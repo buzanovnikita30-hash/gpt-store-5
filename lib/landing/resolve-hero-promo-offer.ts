@@ -316,7 +316,7 @@ export function resolveSpotifyHeroPromoOffer(
     savingsRub: promoActive && hasDiscount ? savingsRub : 0,
     checkoutHref: `/checkout/spotify?plan=${encodeURIComponent(plan.id)}`,
     ctaLabel: plan.ctaText?.trim() || `Подключить за ${sale.toLocaleString("ru")} ₽`,
-    ctaLabelWide: null,
+    ctaLabelWide: `Подключить Spotify Premium за ${sale.toLocaleString("ru")} ₽`,
     promoActive: promoActive && hasDiscount,
     ...buildOfferBase(config, promoActive && hasDiscount),
   };

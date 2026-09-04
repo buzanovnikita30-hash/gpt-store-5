@@ -52,10 +52,10 @@ export default async function SpotifyPage() {
         <div className="relative" style={{ background: "#0a0a0a", color: "#ffffff" }}>
           <SpotifyNav />
           <main className="overflow-x-hidden pb-20 pt-14 md:pb-0">
-            <SpotifyHero />
-            <AnimateSection>
+            <div className="relative z-[1] flex min-h-[calc(100svh-3.5rem)] flex-col">
+              <SpotifyHero />
               <SpotifyTicker />
-            </AnimateSection>
+            </div>
             <AnimateSection delay={0.05}>
               <SpotifyPricing />
             </AnimateSection>

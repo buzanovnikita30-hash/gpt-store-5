@@ -223,7 +223,7 @@ export function SpotifyPromoPlayerCard({
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
               <CalendarDays className="h-3 w-3" aria-hidden />
-              {promo.untilLabel || "До 31 сентября"}
+              {promo.untilLabel || "До 30 сентября"}
             </span>
           </div>
         ) : null}

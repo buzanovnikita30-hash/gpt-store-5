@@ -31,6 +31,13 @@ export const SPOTIFY_HERO = {
   meta: "Более 10 000 подключений · Рейтинг 4.9/5 · Поддержка на связи",
 };
 
+export const SPOTIFY_HERO_RESULT_LINES = [
+  "Premium подключён",
+  "Без рекламы и офлайн",
+  "Оплата выполнена",
+  "Готово к прослушиванию",
+] as const;
+
 export const SPOTIFY_TICKER_ITEMS = [
   "⚡ Активация за 10–15 минут",
   "✓ Гарантия на весь срок",
@@ -42,6 +49,15 @@ export const SPOTIFY_TICKER_ITEMS = [
   "🎵 Музыка офлайн",
   "Оплата в рублях",
 ];
+
+export const SPOTIFY_TRUST_BAR_ITEMS = [
+  { icon: "check" as const, label: "10 000+ подключений" },
+  { icon: "star" as const, label: "Рейтинг 4.9/5" },
+  { icon: "shield" as const, label: "Гарантия на весь срок" },
+  { icon: "card" as const, label: "Оплата в ₽" },
+  { icon: "bolt" as const, label: "Подключение 10–15 минут" },
+  { icon: "chat" as const, label: "Поддержка 24/7" },
+] as const;
 
 export const SPOTIFY_HOW_IT_WORKS = [
   {

@@ -1,49 +1,51 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { SPOTIFY_ACCENT } from "@/lib/content/spotify";
-import { useSpotifyLanding } from "@/components/spotify/SpotifyLandingProvider";
+import { CheckCircle2, CreditCard, MessageCircle, Shield, Star, Zap } from "lucide-react";
+import { SPOTIFY_ACCENT, SPOTIFY_TRUST_BAR_ITEMS } from "@/lib/content/spotify";
+
+const ICONS = {
+  check: CheckCircle2,
+  star: Star,
+  shield: Shield,
+  card: CreditCard,
+  bolt: Zap,
+  chat: MessageCircle,
+} as const;
 
 export function SpotifyTicker() {
-  const { tickerItems } = useSpotifyLanding();
-  const repeated = [...tickerItems, ...tickerItems, ...tickerItems];
-
   return (
     <div
-      className="relative overflow-hidden py-3.5"
+      className="shrink-0 py-3 md:py-4"
       style={{
         background: "rgba(29,185,84,0.06)",
         borderTop: "1px solid rgba(29,185,84,0.15)",
         borderBottom: "1px solid rgba(29,185,84,0.15)",
       }}
     >
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-24"
-        style={{ background: "linear-gradient(to right, #0a0a0a, transparent)" }}
-      />
-      <div
-        className="pointer-events-none absolute bottom-0 right-0 top-0 z-10 w-24"
-        style={{ background: "linear-gradient(to left, #0a0a0a, transparent)" }}
-      />
-      <motion.div
-        className="flex gap-12 whitespace-nowrap"
-        animate={{ x: ["0%", "-33.33%"] }}
-        transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
-      >
-        {repeated.map((item, i) => (
-          <span
-            key={i}
-            className="inline-flex shrink-0 items-center gap-3 text-sm font-medium"
-            style={{ color: "rgba(255,255,255,0.55)" }}
-          >
-            {item}
-            <span
-              className="h-1 w-1 shrink-0 rounded-full"
-              style={{ background: SPOTIFY_ACCENT, opacity: 0.5 }}
-            />
-          </span>
-        ))}
-      </motion.div>
+      <ul className="mx-auto grid w-full max-w-[72rem] grid-cols-2 gap-x-3 gap-y-2.5 px-4 sm:grid-cols-3 md:flex md:flex-wrap md:items-center md:justify-between md:gap-x-5 md:px-8 lg:px-11">
+        {SPOTIFY_TRUST_BAR_ITEMS.map((item) => {
+          const Icon = ICONS[item.icon];
+          return (
+            <li
+              key={item.label}
+              className="inline-flex items-center gap-2.5 text-xs font-medium md:text-sm"
+              style={{ color: "rgba(255,255,255,0.62)" }}
+            >
+              <span
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: "rgba(29,185,84,0.14)" }}
+              >
+                <Icon
+                  className={`h-4 w-4 md:h-5 md:w-5 ${item.icon === "star" ? "fill-amber-400 text-amber-400" : ""}`}
+                  style={item.icon === "star" ? undefined : { color: SPOTIFY_ACCENT }}
+                  aria-hidden
+                />
+              </span>
+              {item.label}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
